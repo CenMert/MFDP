@@ -1,0 +1,22 @@
+# .gitignore
+
+# Python Derleme Dosyaları
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Sanal Ortamlar
+venv/
+env/
+.env
+
+# Veritabanı (Bunu kesinlikle gönderme!)
+*.db
+*.sqlite3
+
+# IDE Ayarları (VSCode, PyCharm vb.)
+.vscode/
+.idea/
+
+# İşletim Sistemi Dosyaları
+.DS_Store
