@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
 from PySide6.QtCore import Qt
 from mfdp_app.core.notifier import Notifier
 from mfdp_app.core.timer import PomodoroTimer
+from mfdp_app.core.dnd_manager import DNDManager
 from mfdp_app.ui.settings_dialog import SettingsDialog
 from mfdp_app.ui.stats_window import StatsWindow # YENİ IMPORT
 
@@ -11,6 +12,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         self.notifier = Notifier()
+        self.dnd_manager = DNDManager()
         self.setWindowTitle("MFDP - Focus")
         self.resize(450, 420)
         
@@ -22,6 +24,10 @@ class MainWindow(QMainWindow):
 
         self.init_ui()
         self.timer_logic.reset()
+
+        # Timer durumlarını dinleyerek DND'yi yönetmeliyiz
+        self.timer_logic.state_changed_signal.connect(self.check_dnd_status)
+        self.timer_logic.finished_signal.connect(lambda: self.dnd_manager.disable_dnd())
 
     def init_ui(self):
         central_widget = QWidget()
@@ -79,6 +85,16 @@ class MainWindow(QMainWindow):
         
         settings_layout.addStretch()
 
+        # YENİ: DND Checkbox
+        self.chk_dnd = QCheckBox("Rahatsız Etme")
+        self.chk_dnd.setObjectName("DNDCheckbox")
+        self.chk_dnd.setChecked(False) # Varsayılan kapalı olsun, kullanıcı seçsin
+        self.chk_dnd.setCursor(Qt.PointingHandCursor)
+        # Eğer kullanıcı kutucuğu manuel kapatırsa, aktif DND'yi de iptal et
+        self.chk_dnd.toggled.connect(self.manual_dnd_toggle)
+
+        settings_layout.addWidget(self.chk_dnd)
+
         # İstatistik Butonu
         self.btn_stats = QPushButton("İstatistik")
         self.btn_stats.setCursor(Qt.PointingHandCursor)
@@ -125,3 +141,45 @@ class MainWindow(QMainWindow):
     def open_stats(self):
         stats_dialog = StatsWindow(self)
         stats_dialog.exec()
+
+    def manual_dnd_toggle(self, checked):
+        """Kullanıcı kutucuğa tıkladığında ne olsun?"""
+        if not checked:
+            # Kutucuk tiki kaldırıldıysa zorla kapat
+            self.dnd_manager.disable_dnd()
+        # Kutucuk işaretlendiyse hemen açmıyoruz, Timer başlayınca açılacak.
+
+    def toggle_timer(self):
+        """Başlat/Duraklat butonu mantığına DND kontrolü ekle."""
+        is_running = self.timer_logic.start_stop()
+
+        if is_running:
+            self.btn_start.setText("Duraklat")
+            self.check_dnd_status() # Timer başladı, DND gerekirse aç
+        else:
+            self.btn_start.setText("Devam Et")
+            self.dnd_manager.disable_dnd() # Duraklatılınca bildirimler gelsin
+
+    def check_dnd_status(self, mode=None):
+        """Şu anki duruma göre DND açılmalı mı?"""
+        # Eğer mode parametresi gelmediyse mevcut modu al
+        if not mode:
+            mode = self.timer_logic.current_state
+
+        # Kurallar:
+        # 1. Checkbox işaretli olmalı.
+        # 2. Timer çalışıyor olmalı (is_running).
+        # 3. Mod "Focus" olmalı (Molada rahatsız edilmek isteyebiliriz).
+
+        if self.chk_dnd.isChecked() and self.timer_logic.is_running and mode == "Focus":
+            self.dnd_manager.enable_dnd()
+        else:
+            self.dnd_manager.disable_dnd()
+
+    # Reset butonuna da bağlamak iyi olur
+    # init_ui içindeki btn_reset.clicked bağlantısını şununla değiştirebilirsin:
+    # self.btn_reset.clicked.connect(self.reset_timer)
+
+    def reset_timer(self):
+        self.timer_logic.reset()
+        self.dnd_manager.disable_dnd()

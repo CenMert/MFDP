@@ -1,0 +1,88 @@
+
+    class MainWindow {
+        -notifier : Notifier
+        -dnd_manager : DNDManager
+        -timer_logic : PomodoroTimer
+        -ui_elements : QWidgets
+        +init_ui()
+        +toggle_timer()
+        +reset_timer()
+        +check_dnd_status()
+        +load_task_list()
+        +open_settings()
+        +open_stats()
+        +update_timer_label(time_str)
+        +on_timer_finished(mode)
+    }
+
+    class PomodoroTimer {
+        +durations : dict
+        +current_state : str
+        +is_running : bool
+        +session_start_time : datetime
+        +current_task : str
+        -- Signals --
+        +timeout_signal
+        +finished_signal
+        +state_changed_signal
+        -- Methods --
+        +start_stop()
+        +reset()
+        +set_mode(mode)
+        +reload_settings()
+        -_update_timer()
+        -_set_time_based_on_state()
+    }
+
+    class Notifier {
+        +sounds : dict
+        +chime_enabled : bool
+        +play_alarm()
+        +play_chime()
+        +set_chime_enabled(bool)
+        -_check_hourly_chime()
+    }
+
+    class DNDManager {
+        +cookie : int
+        +is_active : bool
+        +enable_dnd()
+        +disable_dnd()
+    }
+
+    class DBManager {
+        <<Module>>
+        +create_connection()
+        +setup_database()
+        +log_session_v2()
+        +get_recent_tasks()
+        +get_daily_trend_v2()
+        +get_hourly_productivity_v2()
+        +get_focus_quality_stats()
+        +load_settings()
+        +save_setting()
+    }
+
+    class StatsWindow {
+        +init_daily_chart()
+        +init_hourly_chart()
+        +init_quality_section()
+        -_generate_insight()
+    }
+
+    class SettingsDialog {
+        +load_current_values()
+        +save_values()
+    }
+
+
+    MainWindow *-- PomodoroTimer : Composition
+    MainWindow *-- Notifier : Composition
+    MainWindow *-- DNDManager : Composition
+
+    MainWindow ..> StatsWindow : Creates
+    MainWindow ..> SettingsDialog : Creates
+
+    PomodoroTimer ..> DBManager : Uses (Logging/Settings)
+    StatsWindow ..> DBManager : Uses (Analytics)
+    SettingsDialog ..> DBManager : Uses (Settings)

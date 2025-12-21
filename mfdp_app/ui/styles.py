@@ -95,4 +95,10 @@ QCheckBox::indicator:checked {
 
 /* İsteğe bağlı: Tik işareti görseli kullanmadan renk değişimi yeterli olabilir 
    veya basit bir stil ile devam edebiliriz. */
+
+/* mfdp_app/ui/styles.py içine eklenebilir */
+QCheckBox#DNDCheckbox::indicator:checked {
+    background-color: #f38ba8; /* Pastel Kırmızı (Uyarı rengi) */
+    border-color: #f38ba8;
+}
 """
