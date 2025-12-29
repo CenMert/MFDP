@@ -6,24 +6,30 @@ class PomodoroTimer(QObject):
     timeout_signal = Signal(str)
     finished_signal = Signal(str)
     state_changed_signal = Signal(str)
+    task_changed_signal = Signal(int)  # task_id, -1 if None
 
-    def __init__(self):
+    def __init__(self, task_manager=None):
         super().__init__()
         self.timer = QTimer()
         self.timer.timeout.connect(self._update_timer)
         
-        # Ayarlar (Default)
-        self.durations = {"Focus": 25, "Short Break": 5, "Long Break": 15}
-        self.reload_settings() 
-        
+        # ÖNEMLİ: reload_settings() içinde is_running kullanıldığı için önce tanımlanmalı
         self.current_state = "Focus"
         self.is_running = False
+        
+        # Ayarlar (Default)
+        self.durations = {"Focus": 25, "Short Break": 5, "Long Break": 15}
+        self.reload_settings()
         
         # V2 Verileri
         self.session_start_time = None 
         self.planned_minutes = 0 
         self.paused_duration = 0  # Duraklatma süresi (saniye)
         self.pause_start_time = None  # Duraklatma başlangıç zamanı
+        
+        # Task desteği
+        self.task_manager = task_manager
+        self.current_task_id = None
         
         self._set_time_based_on_state()
 
@@ -105,6 +111,11 @@ class PomodoroTimer(QObject):
             self._save_current_session(completed=1)
             self.finished_signal.emit(self.current_state)
     
+    def set_task(self, task_id):
+        """Timer'a task ata."""
+        self.current_task_id = task_id
+        self.task_changed_signal.emit(task_id if task_id else -1)
+    
     def _save_current_session(self, completed):
         """Mevcut oturumu veritabanına kaydet (yardımcı metod)"""
         if not self.session_start_time:
@@ -121,13 +132,21 @@ class PomodoroTimer(QObject):
             print(f"UYARI: Negatif süre tespit edildi ({actual_duration:.2f} sn), 0 olarak kaydediliyor")
             actual_duration = 0
         
+        # Task bilgilerini al
+        task_name = None
+        category = None
+        if self.task_manager and self.current_task_id:
+            task_name, category = self.task_manager.get_task_name_and_tag()
+        
         log_session_v2(
             start_time=self.session_start_time,
             end_time=end_time,
             duration_sec=int(actual_duration),
             planned_min=self.planned_minutes,
             mode=self.current_state,
-            completed=completed
+            completed=completed,
+            task_name=task_name,
+            category=category
         )
         
         # Temizle
