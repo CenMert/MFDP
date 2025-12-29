@@ -35,7 +35,7 @@ class TaskWindow(QDialog):
         
         # Sol: Task Listesi
         list_group = QGroupBox("Tasklar")
-        list_group.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #45475a; border-radius: 5px; margin-top: 10px; padding-top: 10px; }")
+        list_group.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #45475a; border-radius: 5px; margin-top: 30px; padding-top: 30px; }")
         list_layout = QVBoxLayout()
         
         self.task_tree = QTreeWidget()
@@ -68,7 +68,7 @@ class TaskWindow(QDialog):
         
         # Sağ: Task Formu
         form_group = QGroupBox("Task Oluştur/Düzenle")
-        form_group.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #45475a; border-radius: 5px; margin-top: 10px; padding-top: 10px; }")
+        form_group.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #45475a; border-radius: 5px; margin-top: 30px; padding-top: 30px; }")
         form_layout = QVBoxLayout()
         
         form = QFormLayout()

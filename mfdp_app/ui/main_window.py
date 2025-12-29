@@ -57,11 +57,41 @@ class MainWindow(QMainWindow):
         self.lbl_status.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(self.lbl_status)
         
-        # Aktif task gösterimi
-        self.lbl_active_task = QLabel("Task: Yok")
-        self.lbl_active_task.setStyleSheet("font-size: 14px; color: #bac2de; padding: 5px;")
-        self.lbl_active_task.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(self.lbl_active_task)
+        # Aktif task gösterimi - iki buton (tag ve task name)
+        task_layout = QHBoxLayout()
+        task_layout.setAlignment(Qt.AlignCenter)
+        task_layout.setSpacing(5)
+        
+        self.btn_tag = QPushButton("")
+        self.btn_tag.setEnabled(False)  # Tıklanamaz
+        self.btn_tag.setStyleSheet("""
+            font-size: 12px; 
+            font-weight: bold; 
+            color: #cdd6f4; 
+            background-color: #313244; 
+            border: 1px solid #45475a; 
+            border-radius: 5px; 
+            padding: 5px 10px;
+        """)
+        
+        self.btn_task_name = QPushButton("")
+        self.btn_task_name.setEnabled(False)  # Tıklanamaz
+        self.btn_task_name.setStyleSheet("""
+            font-size: 14px; 
+            color: #bac2de; 
+            background-color: #313244; 
+            border: 1px solid #45475a; 
+            border-radius: 5px; 
+            padding: 5px 15px;
+        """)
+        
+        # Başlangıçta görünmez
+        self.btn_tag.setVisible(False)
+        self.btn_task_name.setVisible(False)
+        
+        task_layout.addWidget(self.btn_tag)
+        task_layout.addWidget(self.btn_task_name)
+        main_layout.addLayout(task_layout)
 
         self.lbl_timer = QLabel("25:00")
         self.lbl_timer.setObjectName("TimerLabel")
@@ -168,11 +198,44 @@ class MainWindow(QMainWindow):
     def on_task_changed(self, task_id):
         """Aktif task değiştiğinde."""
         if task_id == -1 or task_id is None:
-            self.lbl_active_task.setText("Task: Yok")
+            self.btn_tag.setText("")
+            self.btn_task_name.setText("")
+            self.btn_tag.setVisible(False)
+            self.btn_task_name.setVisible(False)
         else:
             task = self.task_manager.get_task_by_id(task_id)
             if task:
-                self.lbl_active_task.setText(f"Task: {task.name} ({task.tag})")
+                # Tag butonu - kalın harflerle
+                self.btn_tag.setText(task.tag.upper())
+                self.btn_task_name.setText(task.name)
+                self.btn_tag.setVisible(True)
+                self.btn_task_name.setVisible(True)
+                
+                # Tag rengini al ve butona uygula
+                tag_info = next((t for t in self.task_manager.get_all_tags() if t['name'] == task.tag), None)
+                if tag_info and tag_info.get('color'):
+                    tag_color = tag_info['color']
+                    self.btn_tag.setStyleSheet(f"""
+                        font-size: 12px; 
+                        font-weight: bold; 
+                        color: #1e1e2e; 
+                        background-color: {tag_color}; 
+                        border: 1px solid {tag_color}; 
+                        border-radius: 5px; 
+                        padding: 0px 10px;
+                    """)
+                else:
+                    # Varsayılan stil
+                    self.btn_tag.setStyleSheet("""
+                        font-size: 12px; 
+                        font-weight: bold; 
+                        color: #cdd6f4; 
+                        background-color: #313244; 
+                        border: 1px solid #45475a; 
+                        border-radius: 5px; 
+                        padding: 0px 10px;
+                    """)
+                
                 self.timer_logic.set_task(task_id)
     
     def open_tasks(self):
