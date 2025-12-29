@@ -3,7 +3,11 @@ from PySide6.QtCore import Qt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
-from mfdp_app.db_manager import get_daily_trend_v2, get_hourly_productivity_v2, get_completion_rate_v2, get_focus_quality_stats
+from mfdp_app.db_manager import (
+    get_daily_trend_v2, get_hourly_productivity_v2, get_completion_rate_v2, 
+    get_focus_quality_stats, get_all_tags, get_daily_trend_by_tag
+)
+import numpy as np
 
 class StatsWindow(QDialog):
     def __init__(self, parent=None):
@@ -27,6 +31,8 @@ class StatsWindow(QDialog):
 
         self.init_header()
         self.init_daily_chart()
+        self.init_daily_chart_by_tag()
+        self.init_tag_distribution()
         self.init_hourly_chart()
         self.init_quality_section()
 
@@ -67,13 +73,121 @@ class StatsWindow(QDialog):
         canvas = FigureCanvas(fig)
         ax = fig.add_subplot(111)
         bars = ax.bar(days, minutes, color='#89b4fa', width=0.6, alpha=0.8)
-        self._setup_ax(ax, "Son 7 Günlük Trend", "Günler", "Dakika")
+        self._setup_ax(ax, "Son 7 Günlük Trend (Toplam)", "Günler", "Dakika")
 
         for bar in bars:
             height = bar.get_height()
             if height > 0:
                 ax.text(bar.get_x() + bar.get_width()/2., height, f'{int(height)}',
                         ha='center', va='bottom', color='#cdd6f4', fontsize=8)
+        fig.tight_layout()
+        self.layout.addWidget(canvas)
+    
+    def init_daily_chart_by_tag(self):
+        """Tag bazlı günlük trend grafiği (grouped bar chart)."""
+        tags = get_all_tags()
+        if not tags:
+            return  # Tag yoksa grafik gösterme
+        
+        # Her tag için veri al
+        tag_data = {}
+        days_set = set()
+        for tag_info in tags:
+            tag = tag_info['name']
+            data = get_daily_trend_by_tag(tag, 7)
+            tag_data[tag] = {day: minutes for day, minutes in data}
+            days_set.update([day for day, _ in data])
+        
+        if not days_set:
+            return  # Veri yoksa gösterme
+        
+        days = sorted(list(days_set))
+        if not days:
+            return
+        
+        fig = self._create_figure()
+        canvas = FigureCanvas(fig)
+        ax = fig.add_subplot(111)
+        
+        # Tag renklerini al
+        tag_colors = {}
+        default_colors = ['#89b4fa', '#a6e3a1', '#f9e2af', '#f38ba8', '#cba6f7', '#fab387', '#94e2d5', '#f5c2e7']
+        for i, tag_info in enumerate(tags):
+            tag = tag_info['name']
+            tag_colors[tag] = tag_info.get('color') or default_colors[i % len(default_colors)]
+        
+        # Grouped bar chart için
+        x = np.arange(len(days))
+        width = 0.8 / len(tags)  # Her tag için genişlik
+        
+        for i, tag in enumerate(tags):
+            tag_name = tag['name']
+            minutes = [tag_data[tag_name].get(day, 0) for day in days]
+            offset = (i - len(tags) / 2 + 0.5) * width
+            bars = ax.bar(x + offset, minutes, width, label=tag_name, 
+                         color=tag_colors[tag_name], alpha=0.8)
+            
+            # Değerleri göster
+            for j, (bar, val) in enumerate(zip(bars, minutes)):
+                if val > 0:
+                    ax.text(bar.get_x() + bar.get_width()/2., val, f'{int(val)}',
+                           ha='center', va='bottom', color='#cdd6f4', fontsize=7)
+        
+        ax.set_xlabel("Günler", color='#bac2de')
+        ax.set_ylabel("Dakika", color='#bac2de')
+        ax.set_title("Son 7 Günlük Trend (Tag Bazlı)", color='#cdd6f4', fontsize=12, pad=15)
+        ax.set_xticks(x)
+        ax.set_xticklabels(days, rotation=45, color='#bac2de')
+        ax.tick_params(axis='y', colors='#bac2de')
+        ax.legend(loc='upper left', facecolor='#313244', edgecolor='#45475a', labelcolor='#cdd6f4')
+        ax.set_facecolor('#1e1e2e')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_color('#45475a')
+        ax.spines['left'].set_color('#45475a')
+        ax.grid(color='#45475a', linestyle='--', linewidth=0.5, alpha=0.5, axis='y')
+        
+        fig.tight_layout()
+        self.layout.addWidget(canvas)
+    
+    def init_tag_distribution(self):
+        """Tag bazlı zaman dağılımı pasta grafiği."""
+        from mfdp_app.db_manager import get_tag_time_summary
+        
+        tags = get_all_tags()
+        if not tags:
+            return
+        
+        # Her tag için toplam süre
+        tag_times = {}
+        for tag_info in tags:
+            tag = tag_info['name']
+            total_minutes = get_tag_time_summary(tag)
+            if total_minutes > 0:
+                tag_times[tag] = {
+                    'minutes': total_minutes,
+                    'color': tag_info.get('color') or '#89b4fa'
+                }
+        
+        if not tag_times:
+            return
+        
+        # Pasta grafik için veri hazırla
+        labels = list(tag_times.keys())
+        sizes = [tag_times[tag]['minutes'] for tag in labels]
+        colors = [tag_times[tag]['color'] for tag in labels]
+        
+        fig = self._create_figure()
+        canvas = FigureCanvas(fig)
+        ax = fig.add_subplot(111)
+        
+        wedges, texts, autotexts = ax.pie(sizes, labels=labels, autopct='%1.1f%%',
+                                         startangle=90, colors=colors,
+                                         textprops=dict(color="#cdd6f4"))
+        
+        ax.set_title("Tag Bazlı Zaman Dağılımı", color='#cdd6f4', fontsize=12)
+        fig.patch.set_facecolor('#1e1e2e')
+        
         fig.tight_layout()
         self.layout.addWidget(canvas)
 

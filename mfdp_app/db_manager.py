@@ -43,12 +43,40 @@ def setup_database(conn):
     # İndeksler (Hızlı sorgu için)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_start_time ON sessions_v2 (start_time);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_completed ON sessions_v2 (completed);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_task_name ON sessions_v2 (task_name);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_category ON sessions_v2 (category);")
+
+    # 3. TASKS Tablosu
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        tag TEXT NOT NULL,
+        planned_duration_minutes INTEGER,
+        created_at TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT 1,
+        color TEXT
+    );
+    """)
+
+    # 4. TAGS Tablosu
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS tags (
+        name TEXT PRIMARY KEY,
+        color TEXT,
+        created_at TEXT NOT NULL
+    );
+    """)
+
+    # Task ve Tag indeksleri
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_tag ON tasks (tag);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_is_active ON tasks (is_active);")
 
     conn.commit()
     print("Veritabanı V2 Şeması Hazır.")
 
 # --- KAYIT FONKSİYONU ---
-def log_session_v2(start_time, end_time, duration_sec, planned_min, mode, completed, task_name=None):
+def log_session_v2(start_time, end_time, duration_sec, planned_min, mode, completed, task_name=None, category=None):
     conn = create_connection()
     if conn:
         try:
@@ -56,12 +84,12 @@ def log_session_v2(start_time, end_time, duration_sec, planned_min, mode, comple
             cursor.execute("""
                 INSERT INTO sessions_v2 (
                     start_time, end_time, duration_seconds, 
-                    planned_duration_minutes, mode, completed, task_name
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    planned_duration_minutes, mode, completed, task_name, category
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 start_time.strftime('%Y-%m-%d %H:%M:%S'),
                 end_time.strftime('%Y-%m-%d %H:%M:%S'),
-                duration_sec, planned_min, mode, completed, task_name
+                duration_sec, planned_min, mode, completed, task_name, category
             ))
             conn.commit()
             print(f"💾 V2 KAYIT: {mode} ({duration_sec} sn)")
@@ -197,3 +225,301 @@ def get_focus_quality_stats():
         except: pass
         finally: conn.close()
     return stats
+
+# --- TASK FONKSİYONLARI ---
+def insert_task(name, tag, planned_duration_minutes=None, color=None):
+    """Yeni task oluştur."""
+    conn = create_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            cursor.execute("""
+                INSERT INTO tasks (name, tag, planned_duration_minutes, created_at, color)
+                VALUES (?, ?, ?, ?, ?)
+            """, (name, tag, planned_duration_minutes, created_at, color))
+            task_id = cursor.lastrowid
+            conn.commit()
+            
+            # Tag yoksa oluştur
+            cursor.execute("SELECT name FROM tags WHERE name = ?", (tag,))
+            if not cursor.fetchone():
+                cursor.execute("""
+                    INSERT INTO tags (name, color, created_at)
+                    VALUES (?, ?, ?)
+                """, (tag, color, created_at))
+                conn.commit()
+            
+            return task_id
+        except sqlite3.IntegrityError:
+            return None  # Duplicate name
+        except sqlite3.Error as e:
+            print(f"Task ekleme hatası: {e}")
+            return None
+        finally:
+            conn.close()
+    return None
+
+def update_task(task_id, name=None, tag=None, planned_duration_minutes=None, color=None, is_active=None):
+    """Task güncelle."""
+    conn = create_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            updates = []
+            params = []
+            
+            if name is not None:
+                updates.append("name = ?")
+                params.append(name)
+            if tag is not None:
+                updates.append("tag = ?")
+                params.append(tag)
+            if planned_duration_minutes is not None:
+                updates.append("planned_duration_minutes = ?")
+                params.append(planned_duration_minutes)
+            if color is not None:
+                updates.append("color = ?")
+                params.append(color)
+            if is_active is not None:
+                updates.append("is_active = ?")
+                params.append(is_active)
+            
+            if updates:
+                params.append(task_id)
+                query = f"UPDATE tasks SET {', '.join(updates)} WHERE id = ?"
+                cursor.execute(query, params)
+                conn.commit()
+                return True
+        except sqlite3.Error as e:
+            print(f"Task güncelleme hatası: {e}")
+            return False
+        finally:
+            conn.close()
+    return False
+
+def get_task_by_id(task_id):
+    """ID'ye göre task getir."""
+    conn = create_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+            row = cursor.fetchone()
+            if row:
+                from mfdp_app.models.data_models import Task
+                return Task(
+                    id=row['id'],
+                    name=row['name'],
+                    tag=row['tag'],
+                    planned_duration_minutes=row['planned_duration_minutes'],
+                    created_at=datetime.datetime.strptime(row['created_at'], '%Y-%m-%d %H:%M:%S'),
+                    is_active=bool(row['is_active']),
+                    color=row['color']
+                )
+        except Exception as e:
+            print(f"Task getirme hatası: {e}")
+        finally:
+            conn.close()
+    return None
+
+def get_all_tasks(include_inactive=False):
+    """Tüm taskları getir."""
+    conn = create_connection()
+    tasks = []
+    if conn:
+        try:
+            cursor = conn.cursor()
+            if include_inactive:
+                cursor.execute("SELECT * FROM tasks ORDER BY created_at DESC")
+            else:
+                cursor.execute("SELECT * FROM tasks WHERE is_active = 1 ORDER BY created_at DESC")
+            
+            from mfdp_app.models.data_models import Task
+            for row in cursor.fetchall():
+                tasks.append(Task(
+                    id=row['id'],
+                    name=row['name'],
+                    tag=row['tag'],
+                    planned_duration_minutes=row['planned_duration_minutes'],
+                    created_at=datetime.datetime.strptime(row['created_at'], '%Y-%m-%d %H:%M:%S'),
+                    is_active=bool(row['is_active']),
+                    color=row['color']
+                ))
+        except Exception as e:
+            print(f"Task listesi getirme hatası: {e}")
+        finally:
+            conn.close()
+    return tasks
+
+def get_tasks_by_tag(tag):
+    """Tag'a göre taskları getir."""
+    conn = create_connection()
+    tasks = []
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM tasks WHERE tag = ? AND is_active = 1 ORDER BY created_at DESC", (tag,))
+            
+            from mfdp_app.models.data_models import Task
+            for row in cursor.fetchall():
+                tasks.append(Task(
+                    id=row['id'],
+                    name=row['name'],
+                    tag=row['tag'],
+                    planned_duration_minutes=row['planned_duration_minutes'],
+                    created_at=datetime.datetime.strptime(row['created_at'], '%Y-%m-%d %H:%M:%S'),
+                    is_active=bool(row['is_active']),
+                    color=row['color']
+                ))
+        except Exception as e:
+            print(f"Tag task listesi getirme hatası: {e}")
+        finally:
+            conn.close()
+    return tasks
+
+def delete_task(task_id):
+    """Task'ı soft delete yap (is_active=False)."""
+    return update_task(task_id, is_active=False)
+
+# --- TAG FONKSİYONLARI ---
+def get_all_tags():
+    """Tüm tagları getir."""
+    conn = create_connection()
+    tags = []
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT name, color FROM tags ORDER BY name")
+            for row in cursor.fetchall():
+                tags.append({
+                    'name': row['name'],
+                    'color': row['color']
+                })
+        except Exception as e:
+            print(f"Tag listesi getirme hatası: {e}")
+        finally:
+            conn.close()
+    return tags
+
+def assign_color_to_tag(tag, color):
+    """Tag'a renk ata."""
+    conn = create_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            # Tag var mı kontrol et
+            cursor.execute("SELECT name FROM tags WHERE name = ?", (tag,))
+            if cursor.fetchone():
+                cursor.execute("UPDATE tags SET color = ? WHERE name = ?", (color, tag))
+            else:
+                created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                cursor.execute("INSERT INTO tags (name, color, created_at) VALUES (?, ?, ?)", (tag, color, created_at))
+            
+            # Task'lardaki tag renklerini de güncelle
+            cursor.execute("UPDATE tasks SET color = ? WHERE tag = ?", (color, tag))
+            conn.commit()
+            return True
+        except sqlite3.Error as e:
+            print(f"Tag renk atama hatası: {e}")
+            return False
+        finally:
+            conn.close()
+    return False
+
+def get_tag_time_summary(tag, days=None):
+    """Tag için toplam süre (dakika)."""
+    conn = create_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            if days:
+                query = """
+                    SELECT SUM(duration_seconds) / 60.0 as total_minutes
+                    FROM sessions_v2
+                    WHERE category = ? AND mode = 'Focus'
+                    AND start_time >= date('now', ?, 'localtime')
+                """
+                cursor.execute(query, (tag, f'-{days} days'))
+            else:
+                query = """
+                    SELECT SUM(duration_seconds) / 60.0 as total_minutes
+                    FROM sessions_v2
+                    WHERE category = ? AND mode = 'Focus'
+                """
+                cursor.execute(query, (tag,))
+            
+            row = cursor.fetchone()
+            return row['total_minutes'] if row and row['total_minutes'] else 0.0
+        except Exception as e:
+            print(f"Tag süre özeti hatası: {e}")
+            return 0.0
+        finally:
+            conn.close()
+    return 0.0
+
+def get_task_time_summary(task_id, days=None):
+    """Task için toplam süre (dakika)."""
+    conn = create_connection()
+    if conn:
+        try:
+            # Önce task adını al
+            task = get_task_by_id(task_id)
+            if not task:
+                return 0.0
+            
+            cursor = conn.cursor()
+            if days:
+                query = """
+                    SELECT SUM(duration_seconds) / 60.0 as total_minutes
+                    FROM sessions_v2
+                    WHERE task_name = ? AND mode = 'Focus'
+                    AND start_time >= date('now', ?, 'localtime')
+                """
+                cursor.execute(query, (task.name, f'-{days} days'))
+            else:
+                query = """
+                    SELECT SUM(duration_seconds) / 60.0 as total_minutes
+                    FROM sessions_v2
+                    WHERE task_name = ? AND mode = 'Focus'
+                """
+                cursor.execute(query, (task.name,))
+            
+            row = cursor.fetchone()
+            return row['total_minutes'] if row and row['total_minutes'] else 0.0
+        except Exception as e:
+            print(f"Task süre özeti hatası: {e}")
+            return 0.0
+        finally:
+            conn.close()
+    return 0.0
+
+def get_daily_trend_by_tag(tag, days=7):
+    """Tag bazlı günlük trend."""
+    conn = create_connection()
+    data = []
+    if conn:
+        try:
+            cursor = conn.cursor()
+            query = """
+                SELECT strftime('%Y-%m-%d', start_time) as day, 
+                       SUM(duration_seconds) / 60 as minutes
+                FROM sessions_v2
+                WHERE mode = 'Focus' AND category = ?
+                AND start_time >= date('now', ?, 'localtime')
+                GROUP BY day
+                ORDER BY day ASC
+            """
+            cursor.execute(query, (tag, f'-{days-1} days'))
+            rows = cursor.fetchall()
+            db_data = {row['day']: row['minutes'] for row in rows}
+            
+            for i in range(days - 1, -1, -1):
+                date_calc = datetime.date.today() - datetime.timedelta(days=i)
+                date_str = date_calc.strftime('%Y-%m-%d')
+                minutes = db_data.get(date_str, 0)
+                display_date = date_calc.strftime('%d %b')
+                data.append((display_date, minutes))
+        except: pass
+        finally: conn.close()
+    return data

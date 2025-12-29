@@ -4,8 +4,10 @@ from PySide6.QtCore import Qt
 from mfdp_app.core.notifier import Notifier
 from mfdp_app.core.timer import PomodoroTimer
 from mfdp_app.core.dnd_manager import DNDManager
+from mfdp_app.core.task_manager import TaskManager
 from mfdp_app.ui.settings_dialog import SettingsDialog
-from mfdp_app.ui.stats_window import StatsWindow # YENİ IMPORT
+from mfdp_app.ui.stats_window import StatsWindow
+from mfdp_app.ui.task_window import TaskWindow
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -13,14 +15,16 @@ class MainWindow(QMainWindow):
         
         self.notifier = Notifier()
         self.dnd_manager = DNDManager()
+        self.task_manager = TaskManager()
         self.setWindowTitle("MFDP - Focus")
         self.resize(450, 420)
         
-        self.timer_logic = PomodoroTimer()
+        self.timer_logic = PomodoroTimer(self.task_manager)
         self.timer_logic.timeout_signal.connect(self.update_timer_label)
         self.timer_logic.state_changed_signal.connect(self.update_status_label)
         self.timer_logic.finished_signal.connect(self.on_timer_finished)
         self.timer_logic.finished_signal.connect(self.notifier.play_alarm)
+        self.timer_logic.task_changed_signal.connect(self.on_task_changed)
 
         self.init_ui()
         self.timer_logic.reset()
@@ -28,6 +32,16 @@ class MainWindow(QMainWindow):
         # Timer durumlarını dinleyerek DND'yi yönetmeliyiz
         self.timer_logic.state_changed_signal.connect(self.check_dnd_status)
         self.timer_logic.finished_signal.connect(lambda: self.dnd_manager.disable_dnd())
+        
+        # TaskManager signal'larını dinle
+        self.task_manager.active_task_changed_signal.connect(self.on_task_changed)
+        
+        # Başlangıçta aktif task'ı göster
+        active_task_id = self.task_manager.get_active_task_id()
+        if active_task_id:
+            self.on_task_changed(active_task_id)
+        else:
+            self.on_task_changed(-1)
 
     def init_ui(self):
         central_widget = QWidget()
@@ -42,6 +56,12 @@ class MainWindow(QMainWindow):
         self.lbl_status.setObjectName("StatusLabel")
         self.lbl_status.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(self.lbl_status)
+        
+        # Aktif task gösterimi
+        self.lbl_active_task = QLabel("Task: Yok")
+        self.lbl_active_task.setStyleSheet("font-size: 14px; color: #bac2de; padding: 5px;")
+        self.lbl_active_task.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(self.lbl_active_task)
 
         self.lbl_timer = QLabel("25:00")
         self.lbl_timer.setObjectName("TimerLabel")
@@ -58,7 +78,7 @@ class MainWindow(QMainWindow):
 
         self.btn_reset = QPushButton("Sıfırla")
         self.btn_reset.setCursor(Qt.PointingHandCursor)
-        self.btn_reset.clicked.connect(self.timer_logic.reset)
+        self.btn_reset.clicked.connect(self.reset_timer)
         self.btn_reset.setMinimumHeight(60)
         btn_layout.addWidget(self.btn_reset)
         main_layout.addLayout(btn_layout)
@@ -95,6 +115,16 @@ class MainWindow(QMainWindow):
 
         settings_layout.addWidget(self.chk_dnd)
 
+        # Task Butonu
+        self.btn_tasks = QPushButton("Tasklar")
+        self.btn_tasks.setCursor(Qt.PointingHandCursor)
+        self.btn_tasks.clicked.connect(self.open_tasks)
+        self.btn_tasks.setFixedWidth(100)
+        self.btn_tasks.setStyleSheet("background-color: #cba6f7; color: #1e1e2e; font-weight: bold; border: none;")
+        settings_layout.addWidget(self.btn_tasks)
+
+        settings_layout.addSpacing(10)
+
         # İstatistik Butonu
         self.btn_stats = QPushButton("İstatistik")
         self.btn_stats.setCursor(Qt.PointingHandCursor)
@@ -114,11 +144,15 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(settings_layout)
 
     def toggle_timer(self):
+        """Başlat/Duraklat butonu mantığına DND kontrolü ekle."""
         is_running = self.timer_logic.start_stop()
+
         if is_running:
             self.btn_start.setText("Duraklat")
+            self.check_dnd_status() # Timer başladı, DND gerekirse aç
         else:
             self.btn_start.setText("Devam Et")
+            self.dnd_manager.disable_dnd() # Duraklatılınca bildirimler gelsin
             
     def update_timer_label(self, time_str):
         self.lbl_timer.setText(time_str)
@@ -130,6 +164,27 @@ class MainWindow(QMainWindow):
     def on_timer_finished(self, finished_mode):
         self.lbl_status.setText(f"{finished_mode} Bitti!")
         self.btn_start.setText("Başlat")
+    
+    def on_task_changed(self, task_id):
+        """Aktif task değiştiğinde."""
+        if task_id == -1 or task_id is None:
+            self.lbl_active_task.setText("Task: Yok")
+        else:
+            task = self.task_manager.get_task_by_id(task_id)
+            if task:
+                self.lbl_active_task.setText(f"Task: {task.name} ({task.tag})")
+                self.timer_logic.set_task(task_id)
+    
+    def open_tasks(self):
+        """Task yönetim penceresini aç."""
+        task_dialog = TaskWindow(self.task_manager, self)
+        task_dialog.task_selected_signal.connect(self.on_task_selected_from_dialog)
+        task_dialog.exec()
+    
+    def on_task_selected_from_dialog(self, task_id):
+        """Dialog'dan task seçildiğinde."""
+        self.task_manager.set_active_task(task_id)
+        self.timer_logic.set_task(task_id)
     
     def open_settings(self):
         dialog = SettingsDialog(self)
@@ -149,17 +204,6 @@ class MainWindow(QMainWindow):
             self.dnd_manager.disable_dnd()
         # Kutucuk işaretlendiyse hemen açmıyoruz, Timer başlayınca açılacak.
 
-    def toggle_timer(self):
-        """Başlat/Duraklat butonu mantığına DND kontrolü ekle."""
-        is_running = self.timer_logic.start_stop()
-
-        if is_running:
-            self.btn_start.setText("Duraklat")
-            self.check_dnd_status() # Timer başladı, DND gerekirse aç
-        else:
-            self.btn_start.setText("Devam Et")
-            self.dnd_manager.disable_dnd() # Duraklatılınca bildirimler gelsin
-
     def check_dnd_status(self, mode=None):
         """Şu anki duruma göre DND açılmalı mı?"""
         # Eğer mode parametresi gelmediyse mevcut modu al
@@ -175,10 +219,6 @@ class MainWindow(QMainWindow):
             self.dnd_manager.enable_dnd()
         else:
             self.dnd_manager.disable_dnd()
-
-    # Reset butonuna da bağlamak iyi olur
-    # init_ui içindeki btn_reset.clicked bağlantısını şununla değiştirebilirsin:
-    # self.btn_reset.clicked.connect(self.reset_timer)
 
     def reset_timer(self):
         self.timer_logic.reset()
