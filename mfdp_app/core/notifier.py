@@ -13,6 +13,7 @@ class Notifier(QObject):
         
         self.alarm_sound = self._load_sound('alarm.wav') 
         self.chime_sound = self._load_sound('chime.wav')
+        self.gong_sound = self._load_sound('gong.wav')
 
         self.last_triggered_minute = -1
         
@@ -44,10 +45,10 @@ class Notifier(QObject):
         else:
             print('\a') 
 
-    def play_chime(self):
+    def play_gong(self):
         print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🕰️ GONG!")
-        if self.chime_sound.source().isValid():
-            self.chime_sound.play()
+        if self.gong_sound.source().isValid():
+            self.gong_sound.play()
         else:
             print('\a')
 
@@ -59,9 +60,9 @@ class Notifier(QObject):
         now = datetime.datetime.now()
         current_minute = now.minute
 
-        if current_minute == 0 or current_minute == 30:
+        if True: #current_minute == 0 or current_minute == 30:
             if current_minute != self.last_triggered_minute:
-                self.play_chime()
+                self.play_gong()
                 self.last_triggered_minute = current_minute
         else:
             self.last_triggered_minute = current_minute
