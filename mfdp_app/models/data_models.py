@@ -11,4 +11,6 @@ class Task:
     created_at: datetime
     is_active: bool
     color: Optional[str] = None
+    parent_id: Optional[int] = None
+    is_completed: bool = False
 

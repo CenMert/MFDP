@@ -2,12 +2,13 @@ from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                                QLabel, QPushButton, QHBoxLayout, QCheckBox)
 from PySide6.QtCore import Qt
 from mfdp_app.core.notifier import Notifier
-from mfdp_app.core.timer import PomodoroTimer
+from mfdp_app.core.timer import PmdrCountdownTimer
 from mfdp_app.core.dnd_manager import DNDManager
 from mfdp_app.core.task_manager import TaskManager
 from mfdp_app.ui.settings_dialog import SettingsDialog
 from mfdp_app.ui.stats_window import StatsWindow
 from mfdp_app.ui.task_window import TaskWindow
+from mfdp_app.ui.recursive_task_window import RecursiveTaskWindow
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -19,7 +20,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("MFDP - Focus")
         self.resize(450, 420)
         
-        self.timer_logic = PomodoroTimer(self.task_manager)
+        # Dialog instance'larını sakla (non-modal için)
+        self.recursive_task_window = None
+        self.task_window = None
+        self.stats_window = None
+        
+        self.timer_logic = PmdrCountdownTimer(self.task_manager)
         self.timer_logic.timeout_signal.connect(self.update_timer_label)
         self.timer_logic.state_changed_signal.connect(self.update_status_label)
         self.timer_logic.finished_signal.connect(self.on_timer_finished)
@@ -155,6 +161,16 @@ class MainWindow(QMainWindow):
 
         settings_layout.addSpacing(10)
 
+        # Recursive Task Butonu
+        self.btn_recursive_tasks = QPushButton("Hiyerarşik Görevler")
+        self.btn_recursive_tasks.setCursor(Qt.PointingHandCursor)
+        self.btn_recursive_tasks.clicked.connect(self.open_recursive_tasks)
+        self.btn_recursive_tasks.setFixedWidth(180)
+        self.btn_recursive_tasks.setStyleSheet("background-color: #f9e2af; color: #1e1e2e; font-weight: bold; border: none;")
+        settings_layout.addWidget(self.btn_recursive_tasks)
+
+        settings_layout.addSpacing(10)
+
         # İstatistik Butonu
         self.btn_stats = QPushButton("İstatistik")
         self.btn_stats.setCursor(Qt.PointingHandCursor)
@@ -240,9 +256,15 @@ class MainWindow(QMainWindow):
     
     def open_tasks(self):
         """Task yönetim penceresini aç."""
-        task_dialog = TaskWindow(self.task_manager, self)
-        task_dialog.task_selected_signal.connect(self.on_task_selected_from_dialog)
-        task_dialog.exec()
+        if self.task_window is None or not self.task_window.isVisible():
+            self.task_window = TaskWindow(self.task_manager, self)
+            self.task_window.task_selected_signal.connect(self.on_task_selected_from_dialog)
+            self.task_window.setModal(False)  # Non-modal yap
+            self.task_window.show()
+        else:
+            # Zaten açıksa öne getir
+            self.task_window.raise_()
+            self.task_window.activateWindow()
     
     def on_task_selected_from_dialog(self, task_id):
         """Dialog'dan task seçildiğinde."""
@@ -257,8 +279,26 @@ class MainWindow(QMainWindow):
                 self.timer_logic.reset()
 
     def open_stats(self):
-        stats_dialog = StatsWindow(self)
-        stats_dialog.exec()
+        """İstatistik penceresini aç."""
+        if self.stats_window is None or not self.stats_window.isVisible():
+            self.stats_window = StatsWindow(self)
+            self.stats_window.setModal(False)  # Non-modal yap
+            self.stats_window.show()
+        else:
+            # Zaten açıksa öne getir
+            self.stats_window.raise_()
+            self.stats_window.activateWindow()
+    
+    def open_recursive_tasks(self):
+        """Özyinelemeli görev yönetim penceresini aç."""
+        if self.recursive_task_window is None or not self.recursive_task_window.isVisible():
+            self.recursive_task_window = RecursiveTaskWindow(self)
+            # setModal(False) zaten __init__ içinde yapılıyor
+            self.recursive_task_window.show()
+        else:
+            # Zaten açıksa öne getir
+            self.recursive_task_window.raise_()
+            self.recursive_task_window.activateWindow()
 
     def manual_dnd_toggle(self, checked):
         """Kullanıcı kutucuğa tıkladığında ne olsun?"""

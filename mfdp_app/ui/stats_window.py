@@ -15,6 +15,9 @@ class StatsWindow(QDialog):
         self.setWindowTitle("Verimlilik Analizi - MFDP")
         self.resize(700, 800)
         self.setStyleSheet("background-color: #1e1e2e; color: #cdd6f4;")
+        
+        # Non-modal yap - arka plandaki pencereyi kullanılabilir tut
+        self.setModal(False)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
