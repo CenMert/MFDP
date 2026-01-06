@@ -60,7 +60,7 @@ class Notifier(QObject):
         now = datetime.datetime.now()
         current_minute = now.minute
 
-        if True: #current_minute == 0 or current_minute == 30:
+        if current_minute == 0 or current_minute == 30: 
             if current_minute != self.last_triggered_minute:
                 self.play_gong()
                 self.last_triggered_minute = current_minute
