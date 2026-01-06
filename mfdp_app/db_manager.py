@@ -55,9 +55,27 @@ def setup_database(conn):
         planned_duration_minutes INTEGER,
         created_at TEXT NOT NULL,
         is_active BOOLEAN DEFAULT 1,
-        color TEXT
+        color TEXT,
+        parent_id INTEGER,
+        is_completed BOOLEAN DEFAULT 0,
+        FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
     );
     """)
+    
+    # Mevcut tabloya parent_id ve is_completed sütunlarını ekle (migration)
+    # SQLite'da FOREIGN KEY constraint ALTER TABLE ile eklenemez, sadece sütun eklenir
+    try:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN parent_id INTEGER")
+    except sqlite3.OperationalError:
+        pass  # Sütun zaten varsa hata verme
+    
+    try:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN is_completed BOOLEAN DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # Sütun zaten varsa hata verme
+    
+    # parent_id için indeks
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks (parent_id);")
 
     # 4. TAGS Tablosu
     cursor.execute("""
@@ -227,7 +245,7 @@ def get_focus_quality_stats():
     return stats
 
 # --- TASK FONKSİYONLARI ---
-def insert_task(name, tag, planned_duration_minutes=None, color=None):
+def insert_task(name, tag, planned_duration_minutes=None, color=None, parent_id=None, is_completed=False):
     """Yeni task oluştur."""
     conn = create_connection()
     if conn:
@@ -235,9 +253,9 @@ def insert_task(name, tag, planned_duration_minutes=None, color=None):
             cursor = conn.cursor()
             created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             cursor.execute("""
-                INSERT INTO tasks (name, tag, planned_duration_minutes, created_at, color)
-                VALUES (?, ?, ?, ?, ?)
-            """, (name, tag, planned_duration_minutes, created_at, color))
+                INSERT INTO tasks (name, tag, planned_duration_minutes, created_at, color, parent_id, is_completed)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (name, tag, planned_duration_minutes, created_at, color, parent_id, is_completed))
             task_id = cursor.lastrowid
             conn.commit()
             
@@ -260,7 +278,7 @@ def insert_task(name, tag, planned_duration_minutes=None, color=None):
             conn.close()
     return None
 
-def update_task(task_id, name=None, tag=None, planned_duration_minutes=None, color=None, is_active=None):
+def update_task(task_id, name=None, tag=None, planned_duration_minutes=None, color=None, is_active=None, parent_id=None, is_completed=None):
     """Task güncelle."""
     conn = create_connection()
     if conn:
@@ -284,6 +302,12 @@ def update_task(task_id, name=None, tag=None, planned_duration_minutes=None, col
             if is_active is not None:
                 updates.append("is_active = ?")
                 params.append(is_active)
+            if parent_id is not None:
+                updates.append("parent_id = ?")
+                params.append(parent_id)
+            if is_completed is not None:
+                updates.append("is_completed = ?")
+                params.append(is_completed)
             
             if updates:
                 params.append(task_id)
@@ -315,7 +339,9 @@ def get_task_by_id(task_id):
                     planned_duration_minutes=row['planned_duration_minutes'],
                     created_at=datetime.datetime.strptime(row['created_at'], '%Y-%m-%d %H:%M:%S'),
                     is_active=bool(row['is_active']),
-                    color=row['color']
+                    color=row['color'],
+                    parent_id=row['parent_id'] if row['parent_id'] else None,
+                    is_completed=bool(row['is_completed']) if row['is_completed'] is not None else False
                 )
         except Exception as e:
             print(f"Task getirme hatası: {e}")
@@ -344,7 +370,9 @@ def get_all_tasks(include_inactive=False):
                     planned_duration_minutes=row['planned_duration_minutes'],
                     created_at=datetime.datetime.strptime(row['created_at'], '%Y-%m-%d %H:%M:%S'),
                     is_active=bool(row['is_active']),
-                    color=row['color']
+                    color=row['color'],
+                    parent_id=row['parent_id'] if row['parent_id'] else None,
+                    is_completed=bool(row['is_completed']) if row['is_completed'] is not None else False
                 ))
         except Exception as e:
             print(f"Task listesi getirme hatası: {e}")
@@ -370,7 +398,9 @@ def get_tasks_by_tag(tag):
                     planned_duration_minutes=row['planned_duration_minutes'],
                     created_at=datetime.datetime.strptime(row['created_at'], '%Y-%m-%d %H:%M:%S'),
                     is_active=bool(row['is_active']),
-                    color=row['color']
+                    color=row['color'],
+                    parent_id=row['parent_id'] if row['parent_id'] else None,
+                    is_completed=bool(row['is_completed']) if row['is_completed'] is not None else False
                 ))
         except Exception as e:
             print(f"Tag task listesi getirme hatası: {e}")
@@ -523,3 +553,71 @@ def get_daily_trend_by_tag(tag, days=7):
         except: pass
         finally: conn.close()
     return data
+
+# --- RECURSIVE TASK FONKSİYONLARI ---
+def get_child_tasks(parent_id):
+    """Bir task'ın alt görevlerini getir."""
+    conn = create_connection()
+    tasks = []
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM tasks WHERE parent_id = ? AND is_active = 1 ORDER BY created_at ASC", (parent_id,))
+            
+            from mfdp_app.models.data_models import Task
+            for row in cursor.fetchall():
+                tasks.append(Task(
+                    id=row['id'],
+                    name=row['name'],
+                    tag=row['tag'],
+                    planned_duration_minutes=row['planned_duration_minutes'],
+                    created_at=datetime.datetime.strptime(row['created_at'], '%Y-%m-%d %H:%M:%S'),
+                    is_active=bool(row['is_active']),
+                    color=row['color'],
+                    parent_id=row['parent_id'] if row['parent_id'] else None,
+                    is_completed=bool(row['is_completed']) if row['is_completed'] is not None else False
+                ))
+        except Exception as e:
+            print(f"Alt görev getirme hatası: {e}")
+        finally:
+            conn.close()
+    return tasks
+
+def get_root_tasks():
+    """Tüm root (parent_id=None) görevleri getir."""
+    conn = create_connection()
+    tasks = []
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM tasks WHERE parent_id IS NULL AND is_active = 1 ORDER BY created_at ASC")
+            
+            from mfdp_app.models.data_models import Task
+            for row in cursor.fetchall():
+                tasks.append(Task(
+                    id=row['id'],
+                    name=row['name'],
+                    tag=row['tag'],
+                    planned_duration_minutes=row['planned_duration_minutes'],
+                    created_at=datetime.datetime.strptime(row['created_at'], '%Y-%m-%d %H:%M:%S'),
+                    is_active=bool(row['is_active']),
+                    color=row['color'],
+                    parent_id=row['parent_id'] if row['parent_id'] else None,
+                    is_completed=bool(row['is_completed']) if row['is_completed'] is not None else False
+                ))
+        except Exception as e:
+            print(f"Root görev getirme hatası: {e}")
+        finally:
+            conn.close()
+    return tasks
+
+def get_all_subtasks_recursive(task_id):
+    """Bir task'ın tüm alt görevlerini recursive olarak getir."""
+    all_subtasks = []
+    direct_children = get_child_tasks(task_id)
+    all_subtasks.extend(direct_children)
+    
+    for child in direct_children:
+        all_subtasks.extend(get_all_subtasks_recursive(child.id))
+    
+    return all_subtasks

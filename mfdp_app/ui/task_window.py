@@ -21,6 +21,9 @@ class TaskWindow(QDialog):
         self.resize(700, 600)
         self.setStyleSheet("background-color: #1e1e2e; color: #cdd6f4;")
         
+        # Non-modal yap - arka plandaki pencereyi kullanılabilir tut
+        self.setModal(False)
+        
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(15)
         main_layout.setContentsMargins(20, 20, 20, 20)
