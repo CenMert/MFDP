@@ -140,7 +140,7 @@ def save_setting(key, value):
 
 # --- ANALİZ FONKSİYONLARI (Grafikler İçin) ---
 def get_daily_trend_v2(days=7):
-    """Son X günün verileri."""
+    """Son X günün verileri (tüm modlar dahil)."""
     conn = create_connection()
     data = []
     if conn:
@@ -150,8 +150,7 @@ def get_daily_trend_v2(days=7):
                 SELECT strftime('%Y-%m-%d', start_time) as day, 
                        SUM(duration_seconds) / 60 as minutes
                 FROM sessions_v2
-                WHERE mode = 'Focus' 
-                AND start_time >= date('now', ?, 'localtime')
+                WHERE start_time >= date('now', ?, 'localtime')
                 GROUP BY day
                 ORDER BY day ASC
             """
@@ -170,7 +169,7 @@ def get_daily_trend_v2(days=7):
     return data
 
 def get_hourly_productivity_v2():
-    """Saatlik verimlilik."""
+    """Saatlik verimlilik (tüm modlar dahil)."""
     conn = create_connection()
     hours_data = [0] * 24
     if conn:
@@ -180,7 +179,6 @@ def get_hourly_productivity_v2():
                 SELECT strftime('%H', start_time) as hour, 
                        SUM(duration_seconds) / 60 as minutes
                 FROM sessions_v2
-                WHERE mode = 'Focus'
                 GROUP BY hour
             """
             cursor.execute(query)
@@ -192,13 +190,13 @@ def get_hourly_productivity_v2():
     return hours_data
 
 def get_completion_rate_v2():
-    """Tamamlama oranı."""
+    """Tamamlama oranı (tüm modlar dahil)."""
     conn = create_connection()
     stats = {'completed': 0, 'interrupted': 0}
     if conn:
         try:
             cursor = conn.cursor()
-            query = "SELECT completed, COUNT(*) as count FROM sessions_v2 WHERE mode = 'Focus' GROUP BY completed"
+            query = "SELECT completed, COUNT(*) as count FROM sessions_v2 GROUP BY completed"
             cursor.execute(query)
             rows = cursor.fetchall()
             for row in rows:
@@ -212,7 +210,7 @@ def get_completion_rate_v2():
 
 def get_focus_quality_stats():
     """
-    Focus oturumlarını kesinti sayısına göre gruplar.
+    Oturumları kesinti sayısına göre gruplar (tüm modlar dahil).
     Dönüş: {'Deep Work': 15, 'Moderate': 5, 'Distracted': 2}
     """
     conn = create_connection()
@@ -224,7 +222,6 @@ def get_focus_quality_stats():
             query = """
                 SELECT interruption_count, COUNT(*) as count
                 FROM sessions_v2
-                WHERE mode = 'Focus'
                 GROUP BY interruption_count
             """
             cursor.execute(query)
@@ -458,7 +455,7 @@ def assign_color_to_tag(tag, color):
     return False
 
 def get_tag_time_summary(tag, days=None):
-    """Tag için toplam süre (dakika)."""
+    """Tag için toplam süre (dakika) - tüm modlar dahil."""
     conn = create_connection()
     if conn:
         try:
@@ -467,7 +464,7 @@ def get_tag_time_summary(tag, days=None):
                 query = """
                     SELECT SUM(duration_seconds) / 60.0 as total_minutes
                     FROM sessions_v2
-                    WHERE category = ? AND mode = 'Focus'
+                    WHERE category = ?
                     AND start_time >= date('now', ?, 'localtime')
                 """
                 cursor.execute(query, (tag, f'-{days} days'))
@@ -475,7 +472,7 @@ def get_tag_time_summary(tag, days=None):
                 query = """
                     SELECT SUM(duration_seconds) / 60.0 as total_minutes
                     FROM sessions_v2
-                    WHERE category = ? AND mode = 'Focus'
+                    WHERE category = ?
                 """
                 cursor.execute(query, (tag,))
             
@@ -503,7 +500,7 @@ def get_task_time_summary(task_id, days=None):
                 query = """
                     SELECT SUM(duration_seconds) / 60.0 as total_minutes
                     FROM sessions_v2
-                    WHERE task_name = ? AND mode = 'Focus'
+                    WHERE task_name = ?
                     AND start_time >= date('now', ?, 'localtime')
                 """
                 cursor.execute(query, (task.name, f'-{days} days'))
@@ -511,7 +508,7 @@ def get_task_time_summary(task_id, days=None):
                 query = """
                     SELECT SUM(duration_seconds) / 60.0 as total_minutes
                     FROM sessions_v2
-                    WHERE task_name = ? AND mode = 'Focus'
+                    WHERE task_name = ?
                 """
                 cursor.execute(query, (task.name,))
             
@@ -525,7 +522,7 @@ def get_task_time_summary(task_id, days=None):
     return 0.0
 
 def get_daily_trend_by_tag(tag, days=7):
-    """Tag bazlı günlük trend."""
+    """Tag bazlı günlük trend (tüm modlar dahil)."""
     conn = create_connection()
     data = []
     if conn:
@@ -535,7 +532,7 @@ def get_daily_trend_by_tag(tag, days=7):
                 SELECT strftime('%Y-%m-%d', start_time) as day, 
                        SUM(duration_seconds) / 60 as minutes
                 FROM sessions_v2
-                WHERE mode = 'Focus' AND category = ?
+                WHERE category = ?
                 AND start_time >= date('now', ?, 'localtime')
                 GROUP BY day
                 ORDER BY day ASC

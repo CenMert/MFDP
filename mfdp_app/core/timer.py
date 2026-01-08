@@ -344,6 +344,181 @@ class PmdrCountdownTimer(QObject):
             self._save_current_session(completed=0)
 
 
+class CountUpTimer(QObject):
+    """
+    Count-up timer (stopwatch) - Süreyi yukarı doğru sayar
+    Mola modları yok, sadece başlat/duraklat, sıfırla ve tamamla
+    """
+    
+    timeout_signal = Signal(str)  # "MM:SS" formatında
+    finished_signal = Signal(str)  # "Free Timer" - tamamlandığında
+    state_changed_signal = Signal(str)  # Durum değişikliği için (opsiyonel)
+    task_changed_signal = Signal(int)  # task_id, -1 if None
+    
+    def __init__(self, task_manager=None):
+        super().__init__()
+        self.timer = QTimer()
+        self.timer.timeout.connect(self._update_timer)
+        
+        # State
+        self.is_running = False
+        
+        # Session yönetimi
+        self.current_session: Optional[FocusSession] = None
+        
+        # Timer count-up (0'dan başlar)
+        self.current_time = 0
+        
+        # Task desteği
+        self.task_manager = task_manager
+        self.current_task_id = None
+    
+    def start_stop(self):
+        """Başlat/Duraklat"""
+        if self.is_running:
+            # DURAKLAT
+            self.timer.stop()
+            self.is_running = False
+            if self.current_session:
+                self.current_session.pause()
+        else:
+            # DEVAM ET veya BAŞLAT
+            if self.current_session:
+                # Devam et
+                self.current_session.resume()
+            else:
+                # Yeni session başlat
+                self._start_new_session()
+            
+            self.timer.start(1000)
+            self.is_running = True
+        
+        return self.is_running
+    
+    def reset(self):
+        """
+        Sıfırla - Mevcut session'ı kaydet (eğer çalışma süresi varsa)
+        """
+        # Eğer aktif session varsa ve çalışma süresi varsa, kaydet
+        if self.current_session and self.current_session.active_seconds > 0:
+            # Reset'i kesinti olarak işaretle
+            self.current_session.mark_interruption("reset")
+            # Ama o zamana kadarki süreyi çalışılmış olarak kaydet (completed=0, kesinti)
+            self._save_current_session(completed=0)
+        
+        # Timer'ı durdur
+        self.timer.stop()
+        self.is_running = False
+        
+        # Session'ı temizle
+        self.current_session = None
+        
+        # Timer'ı sıfırla
+        self.current_time = 0
+        self._emit_time()
+    
+    def complete(self):
+        """
+        Tamamla - Timer'ı durdur ve session'ı tamamlanmış olarak kaydet
+        """
+        # Timer'ı durdur
+        self.timer.stop()
+        self.is_running = False
+        
+        # Session'ı tamamlanmış olarak kaydet
+        if self.current_session:
+            self.current_session.is_completed = True
+            self._save_current_session(completed=1)
+        
+        # Timer'ı sıfırla
+        self.current_time = 0
+        self._emit_time()
+        
+        self.finished_signal.emit("Free Timer")
+    
+    def set_task(self, task_id):
+        """Timer'a task ata"""
+        self.current_task_id = task_id
+        if self.current_session:
+            self.current_session.current_task_id = task_id
+            # Task bilgilerini güncelle
+            if self.task_manager:
+                task_name, category = self.task_manager.get_task_name_and_tag()
+                self.current_session.current_task_name = task_name
+                self.current_session.category = category
+        self.task_changed_signal.emit(task_id if task_id else -1)
+    
+    def _start_new_session(self):
+        """Yeni session başlat"""
+        self.current_session = FocusSession(
+            start_time=datetime.datetime.now(),
+            mode="Free Timer",
+            planned_minutes=0,  # Count-up'da planlanan süre yok
+            current_task_id=self.current_task_id
+        )
+        
+        # Task bilgilerini ekle
+        if self.task_manager and self.current_task_id:
+            task_name, category = self.task_manager.get_task_name_and_tag()
+            self.current_session.current_task_name = task_name
+            self.current_session.category = category
+    
+    def _update_timer(self):
+        """Her saniye çağrılır"""
+        # Timer count-up
+        self.current_time += 1
+        
+        # Session tick (sadece sayıcı artırma)
+        if self.current_session:
+            self.current_session.tick(self.is_running)
+        
+        self._emit_time()
+    
+    def _save_current_session(self, completed):
+        """Mevcut session'ı DB'ye kaydet"""
+        if not self.current_session:
+            print("UYARI: Session yok, kayıt yapılmıyor")
+            return
+        
+        end_time = datetime.datetime.now()
+        
+        # Task bilgilerini al
+        task_name = self.current_session.current_task_name
+        category = self.current_session.category
+        
+        # Session verisini hazırla
+        session_dict = self.current_session.to_db_dict(end_time, task_name, category)
+        
+        # DB'ye kaydet (planned_min=None olarak gönder)
+        log_session_v2(
+            start_time=session_dict['start_time'],
+            end_time=session_dict['end_time'],
+            duration_sec=session_dict['duration_seconds'],
+            planned_min=None,  # Count-up'da planlanan süre yok
+            mode="Free Timer",
+            completed=completed,
+            task_name=session_dict['task_name'],
+            category=session_dict['category']
+        )
+        
+        # Session'ı temizle
+        self.current_session = None
+    
+    def _emit_time(self):
+        """Zamanı UI'ya gönder"""
+        minutes = self.current_time // 60
+        seconds = self.current_time % 60
+        time_str = f"{minutes:02}:{seconds:02}"
+        self.timeout_signal.emit(time_str)
+    
+    # Uygulama kapanışı için hazırlık
+    def save_on_exit(self):
+        """Uygulama kapanırken aktif session'ı kaydet"""
+        if self.current_session and self.current_session.active_seconds > 0:
+            self.current_session.mark_interruption("app_exit")
+            self._save_current_session(completed=0)
+
+
 # Eski PomodoroTimer - Geriye uyumluluk için korunuyor
 class PomodoroTimer(QObject):
     timeout_signal = Signal(str)

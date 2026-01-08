@@ -1,4 +1,4 @@
-# 🍅 MFDP (Multi-Functional Distraction Preventer)
+# MFDP (Multi-Functional Distraction Preventer)
 
 **MFDP**, Linux ortamı için geliştirilmiş, yerel (local-first) çalışan, veri odaklı ve modern bir Pomodoro odaklanma asistanıdır.
 
@@ -10,7 +10,7 @@ Sadece bir zamanlayıcı değil; çalışma alışkanlıklarınızı analiz eden
 
 ## ✨ Özellikler
 
-* **🎯 Akıllı Zamanlayıcı:** Focus, Kısa Mola ve Uzun Mola modları. Özelleştirilebilir süreler.
+* **Akıllı Zamanlayıcı:** Focus, Kısa Mola ve Uzun Mola modları. Özelleştirilebilir süreler. FreeTimer da eklendi.
 * **💾 Local-First Veritabanı:** Tüm oturum verileri SQLite üzerinde, atomik ve ham (raw) formatta saklanır. Bulut yok, veri kaybı yok.
 * **📊 Detaylı İstatistikler:**
     * **Günlük Trend:** Son 7 günlük performans grafiği.
