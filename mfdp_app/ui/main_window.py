@@ -1,8 +1,9 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
                                QLabel, QPushButton, QHBoxLayout, QCheckBox)
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QCloseEvent
 from mfdp_app.core.notifier import Notifier
-from mfdp_app.core.timer import PmdrCountdownTimer
+from mfdp_app.core.timer import PmdrCountdownTimer, CountUpTimer
 from mfdp_app.core.dnd_manager import DNDManager
 from mfdp_app.core.task_manager import TaskManager
 from mfdp_app.ui.settings_dialog import SettingsDialog
@@ -25,19 +26,33 @@ class MainWindow(QMainWindow):
         self.task_window = None
         self.stats_window = None
         
-        self.timer_logic = PmdrCountdownTimer(self.task_manager)
-        self.timer_logic.timeout_signal.connect(self.update_timer_label)
-        self.timer_logic.state_changed_signal.connect(self.update_status_label)
-        self.timer_logic.finished_signal.connect(self.on_timer_finished)
-        self.timer_logic.finished_signal.connect(self.notifier.play_alarm)
-        self.timer_logic.task_changed_signal.connect(self.on_task_changed)
+        # Timer modu ve instance'ları
+        self.timer_mode = "countdown"  # "countdown" veya "countup"
+        self.timer_logic_countdown = PmdrCountdownTimer(self.task_manager)
+        self.timer_logic_countup = CountUpTimer(self.task_manager)
+        
+        # Aktif timer (başlangıçta countdown)
+        self.timer_logic = self.timer_logic_countdown
+        
+        # Countdown timer signal'leri
+        self.timer_logic_countdown.timeout_signal.connect(self.update_timer_label)
+        self.timer_logic_countdown.state_changed_signal.connect(self.update_status_label)
+        self.timer_logic_countdown.finished_signal.connect(self.on_timer_finished)
+        self.timer_logic_countdown.finished_signal.connect(self.notifier.play_alarm)
+        self.timer_logic_countdown.task_changed_signal.connect(self.on_task_changed)
+        
+        # Countup timer signal'leri
+        self.timer_logic_countup.timeout_signal.connect(self.update_timer_label_countup)
+        self.timer_logic_countup.finished_signal.connect(self.on_timer_finished_countup)
+        self.timer_logic_countup.finished_signal.connect(self.notifier.play_alarm)
+        self.timer_logic_countup.task_changed_signal.connect(self.on_task_changed)
 
         self.init_ui()
-        self.timer_logic.reset()
+        self.timer_logic_countdown.reset()
 
-        # Timer durumlarını dinleyerek DND'yi yönetmeliyiz
-        self.timer_logic.state_changed_signal.connect(self.check_dnd_status)
-        self.timer_logic.finished_signal.connect(lambda: self.dnd_manager.disable_dnd())
+        # Timer durumlarını dinleyerek DND'yi yönetmeliyiz (sadece countdown için)
+        self.timer_logic_countdown.state_changed_signal.connect(self.check_dnd_status)
+        self.timer_logic_countdown.finished_signal.connect(lambda: self.dnd_manager.disable_dnd())
         
         # TaskManager signal'larını dinle
         self.task_manager.active_task_changed_signal.connect(self.on_task_changed)
@@ -58,10 +73,43 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(20)
         central_widget.setLayout(main_layout)
 
+        # Üst kısım: Toggle butonu (sağ üstte)
+        top_layout = QHBoxLayout()
+        top_layout.addStretch()
+        
+        # Toggle butonu
+        self.btn_toggle_mode = QPushButton("Count Down")
+        self.btn_toggle_mode.setFixedSize(120, 30)
+        self.btn_toggle_mode.setCursor(Qt.PointingHandCursor)
+        self.btn_toggle_mode.clicked.connect(self.toggle_timer_mode)
+        self.btn_toggle_mode.setStyleSheet("""
+            QPushButton {
+                background-color: #45475a;
+                color: #cdd6f4;
+                border: 1px solid #585b70;
+                border-radius: 5px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #585b70;
+            }
+        """)
+        top_layout.addWidget(self.btn_toggle_mode)
+        main_layout.addLayout(top_layout)
+
+        # Status label (countdown için)
         self.lbl_status = QLabel("Focus")
         self.lbl_status.setObjectName("StatusLabel")
         self.lbl_status.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(self.lbl_status)
+        
+        # Status label (countup için - başlangıçta gizli)
+        self.lbl_status_countup = QLabel("Free Timer")
+        self.lbl_status_countup.setObjectName("StatusLabel")
+        self.lbl_status_countup.setAlignment(Qt.AlignCenter)
+        self.lbl_status_countup.setVisible(False)
+        main_layout.addWidget(self.lbl_status_countup)
         
         # Aktif task gösterimi - iki buton (tag ve task name)
         task_layout = QHBoxLayout()
@@ -99,11 +147,20 @@ class MainWindow(QMainWindow):
         task_layout.addWidget(self.btn_task_name)
         main_layout.addLayout(task_layout)
 
+        # Timer label (countdown için)
         self.lbl_timer = QLabel("25:00")
         self.lbl_timer.setObjectName("TimerLabel")
         self.lbl_timer.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(self.lbl_timer)
+        
+        # Timer label (countup için - başlangıçta gizli)
+        self.lbl_timer_countup = QLabel("00:00")
+        self.lbl_timer_countup.setObjectName("TimerLabel")
+        self.lbl_timer_countup.setAlignment(Qt.AlignCenter)
+        self.lbl_timer_countup.setVisible(False)
+        main_layout.addWidget(self.lbl_timer_countup)
 
+        # Butonlar (countdown için)
         btn_layout = QHBoxLayout()
         self.btn_start = QPushButton("Başlat")
         self.btn_start.setObjectName("StartButton")
@@ -118,19 +175,48 @@ class MainWindow(QMainWindow):
         self.btn_reset.setMinimumHeight(60)
         btn_layout.addWidget(self.btn_reset)
         main_layout.addLayout(btn_layout)
+        
+        # Butonlar (countup için - başlangıçta gizli)
+        btn_layout_countup = QHBoxLayout()
+        self.btn_start_countup = QPushButton("Başlat")
+        self.btn_start_countup.setObjectName("StartButton")
+        self.btn_start_countup.setCursor(Qt.PointingHandCursor)
+        self.btn_start_countup.clicked.connect(self.toggle_timer_countup)
+        self.btn_start_countup.setMinimumHeight(60)
+        self.btn_start_countup.setVisible(False)
+        btn_layout_countup.addWidget(self.btn_start_countup)
 
-        mode_layout = QHBoxLayout()
+        self.btn_reset_countup = QPushButton("Sıfırla")
+        self.btn_reset_countup.setCursor(Qt.PointingHandCursor)
+        self.btn_reset_countup.clicked.connect(self.reset_timer_countup)
+        self.btn_reset_countup.setMinimumHeight(60)
+        self.btn_reset_countup.setVisible(False)
+        btn_layout_countup.addWidget(self.btn_reset_countup)
+        
+        self.btn_complete_countup = QPushButton("Tamamla")
+        self.btn_complete_countup.setCursor(Qt.PointingHandCursor)
+        self.btn_complete_countup.clicked.connect(self.complete_timer_countup)
+        self.btn_complete_countup.setMinimumHeight(60)
+        self.btn_complete_countup.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
+        self.btn_complete_countup.setVisible(False)
+        btn_layout_countup.addWidget(self.btn_complete_countup)
+        main_layout.addLayout(btn_layout_countup)
+
+        # Mola butonları (sadece countdown için)
+        self.mode_layout = QHBoxLayout()
+        self.mode_buttons = []
         modes = [("Focus", "Focus"), ("Kısa Mola", "Short Break"), ("Uzun Mola", "Long Break")]
         for btn_text, mode_key in modes:
             btn = QPushButton(btn_text)
             btn.setObjectName("ModeButton")
             btn.setCursor(Qt.PointingHandCursor)
-            btn.clicked.connect(lambda checked, m=mode_key: self.timer_logic.set_mode(m))
-            mode_layout.addWidget(btn)
-        main_layout.addLayout(mode_layout)
+            btn.clicked.connect(lambda checked, m=mode_key: self.timer_logic_countdown.set_mode(m))
+            self.mode_buttons.append(btn)
+            self.mode_layout.addWidget(btn)
+        main_layout.addLayout(self.mode_layout)
 
         # ALT KONTROLLER
-        settings_layout = QHBoxLayout()
+        settings_layout = QHBoxLayout() 
         
         self.chk_chime = QCheckBox("Gong Sesi")
         self.chk_chime.setObjectName("ChimeCheckbox")
@@ -189,9 +275,66 @@ class MainWindow(QMainWindow):
         
         main_layout.addLayout(settings_layout)
 
+    def toggle_timer_mode(self):
+        """Count-down ve count-up arasında geçiş yap."""
+        # Aktif timer'ı durdur
+        if self.timer_mode == "countdown":
+            if self.timer_logic_countdown.is_running:
+                self.timer_logic_countdown.start_stop()
+        else:
+            if self.timer_logic_countup.is_running:
+                self.timer_logic_countup.start_stop()
+        
+        # Mod değiştir
+        if self.timer_mode == "countdown":
+            self.timer_mode = "countup"
+            self.btn_toggle_mode.setText("Count Up")
+            
+            # Countdown UI'ını gizle
+            self.lbl_status.setVisible(False)
+            self.lbl_timer.setVisible(False)
+            self.btn_start.setVisible(False)
+            self.btn_reset.setVisible(False)
+            # Mola butonlarını gizle
+            for btn in self.mode_buttons:
+                btn.setVisible(False)
+            
+            # Countup UI'ını göster
+            self.lbl_status_countup.setVisible(True)
+            self.lbl_timer_countup.setVisible(True)
+            self.btn_start_countup.setVisible(True)
+            self.btn_reset_countup.setVisible(True)
+            self.btn_complete_countup.setVisible(True)
+            
+            # Aktif timer'ı değiştir
+            self.timer_logic = self.timer_logic_countup
+        else:
+            self.timer_mode = "countdown"
+            self.btn_toggle_mode.setText("Count Down")
+            
+            # Countup UI'ını gizle
+            self.lbl_status_countup.setVisible(False)
+            self.lbl_timer_countup.setVisible(False)
+            self.btn_start_countup.setVisible(False)
+            self.btn_reset_countup.setVisible(False)
+            self.btn_complete_countup.setVisible(False)
+            
+            # Countdown UI'ını göster
+            self.lbl_status.setVisible(True)
+            self.lbl_timer.setVisible(True)
+            self.btn_start.setVisible(True)
+            self.btn_reset.setVisible(True)
+            # Mola butonlarını göster
+            for btn in self.mode_buttons:
+                btn.setVisible(True)
+            
+            # Aktif timer'ı değiştir
+            self.timer_logic = self.timer_logic_countdown
+            self.timer_logic_countdown.reset()
+    
     def toggle_timer(self):
-        """Başlat/Duraklat butonu mantığına DND kontrolü ekle."""
-        is_running = self.timer_logic.start_stop()
+        """Başlat/Duraklat butonu mantığına DND kontrolü ekle (countdown için)."""
+        is_running = self.timer_logic_countdown.start_stop()
 
         if is_running:
             self.btn_start.setText("Duraklat")
@@ -199,6 +342,36 @@ class MainWindow(QMainWindow):
         else:
             self.btn_start.setText("Devam Et")
             self.dnd_manager.disable_dnd() # Duraklatılınca bildirimler gelsin
+    
+    def toggle_timer_countup(self):
+        """Count-up timer için başlat/duraklat."""
+        is_running = self.timer_logic_countup.start_stop()
+        
+        if is_running:
+            self.btn_start_countup.setText("Duraklat")
+        else:
+            self.btn_start_countup.setText("Devam Et")
+    
+    def reset_timer_countup(self):
+        """Count-up timer'ı sıfırla."""
+        self.timer_logic_countup.reset()
+        self.btn_start_countup.setText("Başlat")
+        self.lbl_timer_countup.setText("00:00")
+    
+    def complete_timer_countup(self):
+        """Count-up timer'ı tamamla."""
+        self.timer_logic_countup.complete()
+        self.btn_start_countup.setText("Başlat")
+        self.lbl_timer_countup.setText("00:00")
+    
+    def update_timer_label_countup(self, time_str):
+        """Count-up timer label'ını güncelle."""
+        self.lbl_timer_countup.setText(time_str)
+    
+    def on_timer_finished_countup(self, finished_mode):
+        """Count-up timer tamamlandığında."""
+        self.lbl_status_countup.setText("Tamamlandı!")
+        self.btn_start_countup.setText("Başlat")
             
     def update_timer_label(self, time_str):
         self.lbl_timer.setText(time_str)
@@ -252,7 +425,9 @@ class MainWindow(QMainWindow):
                         padding: 0px 10px;
                     """)
                 
-                self.timer_logic.set_task(task_id)
+                # Her iki timer'a da task ata
+                self.timer_logic_countdown.set_task(task_id)
+                self.timer_logic_countup.set_task(task_id)
     
     def open_tasks(self):
         """Task yönetim penceresini aç."""
@@ -324,5 +499,12 @@ class MainWindow(QMainWindow):
             self.dnd_manager.disable_dnd()
 
     def reset_timer(self):
-        self.timer_logic.reset()
+        """Countdown timer'ı sıfırla."""
+        self.timer_logic_countdown.reset()
         self.dnd_manager.disable_dnd()
+    
+    def closeEvent(self, event: QCloseEvent):
+        """Uygulama kapanırken aktif timer'ları kaydet."""
+        self.timer_logic_countdown.save_on_exit()
+        self.timer_logic_countup.save_on_exit()
+        event.accept()
