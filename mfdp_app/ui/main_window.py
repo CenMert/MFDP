@@ -425,9 +425,12 @@ class MainWindow(QMainWindow):
                         padding: 0px 10px;
                     """)
                 
-                # Her iki timer'a da task ata
-                self.timer_logic_countdown.set_task(task_id)
-                self.timer_logic_countup.set_task(task_id)
+                # Her iki timer'a da task ata (set_task içinde zaten kontrol var, ama ek güvenlik için)
+                # Timer'ların mevcut task_id'si farklıysa güncelle
+                if self.timer_logic_countdown.current_task_id != task_id:
+                    self.timer_logic_countdown.set_task(task_id)
+                if self.timer_logic_countup.current_task_id != task_id:
+                    self.timer_logic_countup.set_task(task_id)
     
     def open_tasks(self):
         """Task yönetim penceresini aç."""

@@ -237,6 +237,10 @@ class PmdrCountdownTimer(QObject):
     
     def set_task(self, task_id):
         """Timer'a task ata"""
+        # Eğer aynı task_id zaten ayarlıysa, signal emit etme (sonsuz döngüyü önle)
+        if self.current_task_id == task_id:
+            return
+        
         self.current_task_id = task_id
         if self.current_session:
             self.current_session.current_task_id = task_id
@@ -438,6 +442,10 @@ class CountUpTimer(QObject):
     
     def set_task(self, task_id):
         """Timer'a task ata"""
+        # Eğer aynı task_id zaten ayarlıysa, signal emit etme (sonsuz döngüyü önle)
+        if self.current_task_id == task_id:
+            return
+        
         self.current_task_id = task_id
         if self.current_session:
             self.current_session.current_task_id = task_id
@@ -631,6 +639,10 @@ class PomodoroTimer(QObject):
     
     def set_task(self, task_id):
         """Timer'a task ata."""
+        # Eğer aynı task_id zaten ayarlıysa, signal emit etme (sonsuz döngüyü önle)
+        if self.current_task_id == task_id:
+            return
+        
         self.current_task_id = task_id
         self.task_changed_signal.emit(task_id if task_id else -1)
     
