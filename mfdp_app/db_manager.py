@@ -45,6 +45,7 @@ def setup_database(conn):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_completed ON sessions_v2 (completed);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_task_name ON sessions_v2 (task_name);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_category ON sessions_v2 (category);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_mode ON sessions_v2 (mode);")
 
     # 3. TASKS Tablosu
     cursor.execute("""
@@ -140,7 +141,7 @@ def save_setting(key, value):
 
 # --- ANALİZ FONKSİYONLARI (Grafikler İçin) ---
 def get_daily_trend_v2(days=7):
-    """Son X günün verileri (tüm modlar dahil)."""
+    """Son X günün verileri (sadece Focus ve Free Timer modları)."""
     conn = create_connection()
     data = []
     if conn:
@@ -150,7 +151,8 @@ def get_daily_trend_v2(days=7):
                 SELECT strftime('%Y-%m-%d', start_time) as day, 
                        SUM(duration_seconds) / 60 as minutes
                 FROM sessions_v2
-                WHERE start_time >= date('now', ?, 'localtime')
+                WHERE (mode = 'Focus' OR mode = 'Free Timer')
+                AND start_time >= date('now', ?, 'localtime')
                 GROUP BY day
                 ORDER BY day ASC
             """
@@ -169,7 +171,7 @@ def get_daily_trend_v2(days=7):
     return data
 
 def get_hourly_productivity_v2():
-    """Saatlik verimlilik (tüm modlar dahil)."""
+    """Saatlik verimlilik (sadece Focus ve Free Timer modları)."""
     conn = create_connection()
     hours_data = [0] * 24
     if conn:
@@ -179,6 +181,7 @@ def get_hourly_productivity_v2():
                 SELECT strftime('%H', start_time) as hour, 
                        SUM(duration_seconds) / 60 as minutes
                 FROM sessions_v2
+                WHERE mode = 'Focus' OR mode = 'Free Timer'
                 GROUP BY hour
             """
             cursor.execute(query)
@@ -190,13 +193,18 @@ def get_hourly_productivity_v2():
     return hours_data
 
 def get_completion_rate_v2():
-    """Tamamlama oranı (tüm modlar dahil)."""
+    """Tamamlama oranı (sadece Focus ve Free Timer modları)."""
     conn = create_connection()
     stats = {'completed': 0, 'interrupted': 0}
     if conn:
         try:
             cursor = conn.cursor()
-            query = "SELECT completed, COUNT(*) as count FROM sessions_v2 GROUP BY completed"
+            query = """
+                SELECT completed, COUNT(*) as count 
+                FROM sessions_v2 
+                WHERE mode = 'Focus' OR mode = 'Free Timer'
+                GROUP BY completed
+            """
             cursor.execute(query)
             rows = cursor.fetchall()
             for row in rows:
@@ -210,7 +218,7 @@ def get_completion_rate_v2():
 
 def get_focus_quality_stats():
     """
-    Oturumları kesinti sayısına göre gruplar (tüm modlar dahil).
+    Oturumları kesinti sayısına göre gruplar (sadece Focus ve Free Timer modları).
     Dönüş: {'Deep Work': 15, 'Moderate': 5, 'Distracted': 2}
     """
     conn = create_connection()
@@ -222,6 +230,7 @@ def get_focus_quality_stats():
             query = """
                 SELECT interruption_count, COUNT(*) as count
                 FROM sessions_v2
+                WHERE mode = 'Focus' OR mode = 'Free Timer'
                 GROUP BY interruption_count
             """
             cursor.execute(query)
@@ -455,7 +464,7 @@ def assign_color_to_tag(tag, color):
     return False
 
 def get_tag_time_summary(tag, days=None):
-    """Tag için toplam süre (dakika) - tüm modlar dahil."""
+    """Tag için toplam süre (dakika) - sadece Focus ve Free Timer modları."""
     conn = create_connection()
     if conn:
         try:
@@ -465,6 +474,7 @@ def get_tag_time_summary(tag, days=None):
                     SELECT SUM(duration_seconds) / 60.0 as total_minutes
                     FROM sessions_v2
                     WHERE category = ?
+                    AND (mode = 'Focus' OR mode = 'Free Timer')
                     AND start_time >= date('now', ?, 'localtime')
                 """
                 cursor.execute(query, (tag, f'-{days} days'))
@@ -473,6 +483,7 @@ def get_tag_time_summary(tag, days=None):
                     SELECT SUM(duration_seconds) / 60.0 as total_minutes
                     FROM sessions_v2
                     WHERE category = ?
+                    AND (mode = 'Focus' OR mode = 'Free Timer')
                 """
                 cursor.execute(query, (tag,))
             
@@ -501,6 +512,7 @@ def get_task_time_summary(task_id, days=None):
                     SELECT SUM(duration_seconds) / 60.0 as total_minutes
                     FROM sessions_v2
                     WHERE task_name = ?
+                    AND (mode = 'Focus' OR mode = 'Free Timer')
                     AND start_time >= date('now', ?, 'localtime')
                 """
                 cursor.execute(query, (task.name, f'-{days} days'))
@@ -509,6 +521,7 @@ def get_task_time_summary(task_id, days=None):
                     SELECT SUM(duration_seconds) / 60.0 as total_minutes
                     FROM sessions_v2
                     WHERE task_name = ?
+                    AND (mode = 'Focus' OR mode = 'Free Timer')
                 """
                 cursor.execute(query, (task.name,))
             
@@ -522,7 +535,7 @@ def get_task_time_summary(task_id, days=None):
     return 0.0
 
 def get_daily_trend_by_tag(tag, days=7):
-    """Tag bazlı günlük trend (tüm modlar dahil)."""
+    """Tag bazlı günlük trend (sadece Focus ve Free Timer modları)."""
     conn = create_connection()
     data = []
     if conn:
@@ -533,6 +546,7 @@ def get_daily_trend_by_tag(tag, days=7):
                        SUM(duration_seconds) / 60 as minutes
                 FROM sessions_v2
                 WHERE category = ?
+                AND (mode = 'Focus' OR mode = 'Free Timer')
                 AND start_time >= date('now', ?, 'localtime')
                 GROUP BY day
                 ORDER BY day ASC

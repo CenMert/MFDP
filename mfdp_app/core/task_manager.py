@@ -72,6 +72,10 @@ class TaskManager(QObject):
     
     def set_active_task(self, task_id: Optional[int]):
         """Aktif task ayarla."""
+        # Eğer aynı task_id zaten ayarlıysa, signal emit etme (sonsuz döngüyü önle)
+        if self._active_task_id == task_id:
+            return
+        
         if task_id is not None:
             task = get_task_by_id(task_id)
             if not task or not task.is_active:

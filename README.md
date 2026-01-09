@@ -39,7 +39,7 @@ Projeyi yerel makinenize klonlayın ve gerekli bağımlılıkları kurun.
 
 1.  **Repoyu klonlayın:**
     ```bash
-    git clone [https://github.com/CenMert/MFDP.git](https://github.com/CenMert/MFDP.git)
+    git clone https://github.com/CenMert/MFDP.git
     cd MFDP
     ```
 
