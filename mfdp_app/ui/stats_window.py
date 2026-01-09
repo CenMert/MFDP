@@ -266,6 +266,8 @@ class StatsWindow(QDialog):
         if total == 0: return "Analiz için yeterli veri yok."
 
         deep_ratio = (deep / total) * 100
+        moderate_ratio = (moderate / total) * 100
+        distracted_ratio = (distracted / total) * 100
 
         text = "<b>📊 Odaklanma Karnesi</b><br><br>"
 
@@ -277,8 +279,9 @@ class StatsWindow(QDialog):
             text += "⚠️ <b>Dikkat Dağınıklığı Yüksek.</b><br>Çoğu oturumun bölünmüş durumda. Bildirimleri kapatmayı veya ortamını değiştirmeyi dene.<br><br>"
 
         text += f"• Toplam <b>{total}</b> oturumun <b>{deep}</b> tanesi (%{int(deep_ratio)}) tamamen kesintisizdi.<br>"
-
+        if moderate > 0:
+            text += f"• <b>{moderate}</b> oturum (%{int(moderate_ratio)}) orta düzeyde kesinti yaşadı (1-2 kez).<br>"
         if distracted > 0:
-            text += f"• <b>{distracted}</b> oturumda 3'ten fazla kez bölündün. Bu zaman aralıklarını incelemelisin."
+            text += f"• <b>{distracted}</b> oturum (%{int(distracted_ratio)}) yüksek kesinti yaşadı (3+ kez). Bu zaman aralıklarını incelemelisin."
 
         return text

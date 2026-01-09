@@ -318,7 +318,8 @@ class PmdrCountdownTimer(QObject):
             mode=session_dict['mode'],
             completed=completed,
             task_name=session_dict['task_name'],
-            category=session_dict['category']
+            category=session_dict['category'],
+            interruption_count=session_dict['interruption_count']
         )
         
         # TODO: Interruptions tablosuna kaydet (şimdilik sadece log)
@@ -506,7 +507,8 @@ class CountUpTimer(QObject):
             mode="Free Timer",
             completed=completed,
             task_name=session_dict['task_name'],
-            category=session_dict['category']
+            category=session_dict['category'],
+            interruption_count=session_dict['interruption_count']
         )
         
         # Session'ı temizle
@@ -552,6 +554,7 @@ class PomodoroTimer(QObject):
         self.planned_minutes = 0 
         self.paused_duration = 0  # Duraklatma süresi (saniye)
         self.pause_start_time = None  # Duraklatma başlangıç zamanı
+        self.interruption_count = 0  # Kesinti sayısı
         
         # Task desteği
         self.task_manager = task_manager
@@ -565,6 +568,7 @@ class PomodoroTimer(QObject):
             self.timer.stop()
             self.is_running = False
             self.pause_start_time = datetime.datetime.now()
+            self.interruption_count += 1  # Kesinti say
         else:
             # DEVAM ET veya BAŞLAT
             if self.pause_start_time:
@@ -590,6 +594,7 @@ class PomodoroTimer(QObject):
         self.session_start_time = None
         self.paused_duration = 0
         self.pause_start_time = None
+        self.interruption_count += 1  # Kesinti say
         self._set_time_based_on_state()
         self._emit_time()
 
@@ -604,6 +609,7 @@ class PomodoroTimer(QObject):
         self.session_start_time = None
         self.paused_duration = 0  # Yeni mod, duraklatma sıfırla
         self.pause_start_time = None
+        self.interruption_count += 1  # Kesinti say
         self.planned_minutes = self.durations.get(mode, 25)  # YENİ MODUN SÜRESİNİ AYARLA
         self._set_time_based_on_state()
         self.state_changed_signal.emit(mode)
@@ -676,8 +682,15 @@ class PomodoroTimer(QObject):
             mode=self.current_state,
             completed=completed,
             task_name=task_name,
-            category=category
+            category=category,
+            interruption_count=self.interruption_count
         )
+        
+        # Session sonrası temizlik
+        self.session_start_time = None
+        self.paused_duration = 0
+        self.pause_start_time = None
+        self.interruption_count = 0  # Kesinti sayısını sıfırla
         
         # Temizle
         self.session_start_time = None

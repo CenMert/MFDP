@@ -95,7 +95,7 @@ def setup_database(conn):
     print("Veritabanı V2 Şeması Hazır.")
 
 # --- KAYIT FONKSİYONU ---
-def log_session_v2(start_time, end_time, duration_sec, planned_min, mode, completed, task_name=None, category=None):
+def log_session_v2(start_time, end_time, duration_sec, planned_min, mode, completed, task_name=None, category=None, interruption_count=0):
     conn = create_connection()
     if conn:
         try:
@@ -103,15 +103,15 @@ def log_session_v2(start_time, end_time, duration_sec, planned_min, mode, comple
             cursor.execute("""
                 INSERT INTO sessions_v2 (
                     start_time, end_time, duration_seconds, 
-                    planned_duration_minutes, mode, completed, task_name, category
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    planned_duration_minutes, mode, completed, task_name, category, interruption_count
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 start_time.strftime('%Y-%m-%d %H:%M:%S'),
                 end_time.strftime('%Y-%m-%d %H:%M:%S'),
-                duration_sec, planned_min, mode, completed, task_name, category
+                duration_sec, planned_min, mode, completed, task_name, category, interruption_count
             ))
             conn.commit()
-            print(f"💾 V2 KAYIT: {mode} ({duration_sec} sn)")
+            print(f"💾 V2 KAYIT: {mode} ({duration_sec} sn, {interruption_count} kesinti)")
         except sqlite3.Error as e:
             print(f"Kayıt hatası: {e}")
         finally:
