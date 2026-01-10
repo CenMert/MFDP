@@ -186,8 +186,9 @@ class PmdrCountdownTimer(QObject):
         """
         # Eğer aktif session varsa ve çalışma süresi varsa, kaydet
         if self.current_session and self.current_session.active_seconds > 0:
-            # Reset'i kesinti olarak işaretle
-            self.current_session.mark_interruption("reset")
+            if not self.current_session.is_paused:
+                # Reset'i kesinti olarak işaretle
+                self.current_session.mark_interruption("reset")
             # Ama o zamana kadarki süreyi çalışılmış olarak kaydet (completed=0, kesinti)
             self._save_current_session(completed=0)
         
@@ -409,8 +410,9 @@ class CountUpTimer(QObject):
         """
         # Eğer aktif session varsa ve çalışma süresi varsa, kaydet
         if self.current_session and self.current_session.active_seconds > 0:
-            # Reset'i kesinti olarak işaretle
-            self.current_session.mark_interruption("reset")
+            if not self.current_session.is_paused:
+                # Reset'i kesinti olarak işaretle
+                self.current_session.mark_interruption("reset")
             # Ama o zamana kadarki süreyi çalışılmış olarak kaydet (completed=0, kesinti)
             self._save_current_session(completed=0)
         
