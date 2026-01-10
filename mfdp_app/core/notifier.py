@@ -39,14 +39,14 @@ class Notifier(QObject):
         print(f"Ayaklı Saat özelliği: {status}")
 
     def play_alarm(self):
-        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🔔 ALARM ÇALIYOR!")
+        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] ===ALARM RING!===")
         if self.alarm_sound.source().isValid():
             self.alarm_sound.play()
         else:
             print('\a') 
 
     def play_gong(self):
-        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🕰️ GONG!")
+        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] ===GONG!===")
         if self.gong_sound.source().isValid():
             self.gong_sound.play()
         else:
