@@ -88,6 +88,7 @@ class FocusSession:
         self.interruption_times.append(datetime.datetime.now())
         self.interruption_seconds.append(self.active_seconds)
         self.interruption_types.append(interruption_type)
+        print(f" Interruption marked: {interruption_type} @ {self.active_seconds // 60}dk {self.active_seconds % 60}s")
     
     def to_db_dict(self, end_time: datetime.datetime, task_name: Optional[str], category: Optional[str]):
         """DB'ye kaydetmek için dict'e çevir"""
@@ -162,6 +163,7 @@ class PmdrCountdownTimer(QObject):
             self.timer.stop()
             self.is_running = False
             if self.current_session:
+                self.current_session.mark_interruption()
                 self.current_session.pause()
         else:
             # DEVAM ET veya BAŞLAT
@@ -385,6 +387,7 @@ class CountUpTimer(QObject):
             self.timer.stop()
             self.is_running = False
             if self.current_session:
+                self.current_session.mark_interruption()
                 self.current_session.pause()
         else:
             # DEVAM ET veya BAŞLAT
