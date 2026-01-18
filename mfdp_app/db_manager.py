@@ -91,6 +91,26 @@ def setup_database(conn):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_tag ON tasks (tag);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_is_active ON tasks (is_active);")
 
+    # 5. ATOMIC EVENTS Tablosu (Event Sourcing - Ham veri toplama)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS atomic_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        event_type TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        elapsed_seconds INTEGER NOT NULL,
+        metadata TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES sessions_v2(id) ON DELETE CASCADE
+    );
+    """)
+    
+    # Atomic events indeksleri (hızlı sorgulamalar için)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_atomic_events_session_id ON atomic_events (session_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_atomic_events_event_type ON atomic_events (event_type);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_atomic_events_timestamp ON atomic_events (timestamp);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_atomic_events_elapsed_seconds ON atomic_events (elapsed_seconds);")
+
     conn.commit()
     print("Veritabanı V2 Şeması Hazır.")
 
@@ -632,3 +652,296 @@ def get_all_subtasks_recursive(task_id):
         all_subtasks.extend(get_all_subtasks_recursive(child.id))
     
     return all_subtasks
+
+# --- ATOMIC ANALYZER FONKSİYONLARI (Event Sourcing) ---
+
+def insert_atomic_events(events_data):
+    """
+    Atomik olayları toplu olarak veritabanına ekle.
+    
+    AtomicAnalyzer'dan flush_events() çağrısı ile kullanılır.
+    Her olay ham veri olarak saklanır, bu sayede gelecekte farklı analizler yapılabilir.
+    
+    Args:
+        events_data: Olaylar listesi, her biri şu yapıda:
+        {
+            'event_type': 'interruption_detected',
+            'session_id': 123,
+            'elapsed_seconds': 180,
+            'timestamp': '2025-01-18T10:30:45.123456',
+            'metadata': {'reason': 'user_pause', 'severity': 'low', ...}
+        }
+    
+    Returns:
+        True başarılı, False hata
+    """
+    if not events_data:
+        return True
+    
+    conn = create_connection()
+    if not conn:
+        return False
+    
+    try:
+        cursor = conn.cursor()
+        import json
+        
+        for event in events_data:
+            # metadata sözlüğünü JSON string'e dönüştür
+            metadata_json = json.dumps(event.get('metadata', {})) if event.get('metadata') else None
+            
+            cursor.execute("""
+                INSERT INTO atomic_events 
+                (session_id, event_type, timestamp, elapsed_seconds, metadata, created_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (
+                event['session_id'],
+                event['event_type'],
+                event['timestamp'],
+                event['elapsed_seconds'],
+                metadata_json
+            ))
+        
+        conn.commit()
+        print(f"✅ {len(events_data)} atomik olay veritabanına kaydedildi.")
+        return True
+        
+    except sqlite3.Error as e:
+        print(f"Atomik olay ekleme hatası: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_atomic_events(session_id):
+    """
+    Belirli bir oturum için tüm atomik olayları getir.
+    
+    Oturum sırasında kaydedilen tüm olayları kronolojik sıraya göre döndürür.
+    
+    Args:
+        session_id: Oturum ID'si (sessions_v2 tablosundan)
+    
+    Returns:
+        Olaylar listesi, her biri şu yapıda:
+        {
+            'id': 1,
+            'session_id': 123,
+            'event_type': 'interruption_detected',
+            'elapsed_seconds': 180,
+            'timestamp': '2025-01-18T10:30:45',
+            'metadata': {...},
+            'created_at': '2025-01-18T10:30:45'
+        }
+    """
+    conn = create_connection()
+    if not conn:
+        return []
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, session_id, event_type, elapsed_seconds, timestamp, metadata, created_at
+            FROM atomic_events
+            WHERE session_id = ?
+            ORDER BY elapsed_seconds ASC, id ASC
+        """, (session_id,))
+        
+        events = []
+        import json
+        for row in cursor.fetchall():
+            # metadata JSON string'ini sözlüğe dönüştür
+            metadata = json.loads(row['metadata']) if row['metadata'] else {}
+            
+            events.append({
+                'id': row['id'],
+                'session_id': row['session_id'],
+                'event_type': row['event_type'],
+                'elapsed_seconds': row['elapsed_seconds'],
+                'timestamp': row['timestamp'],
+                'metadata': metadata,
+                'created_at': row['created_at']
+            })
+        
+        return events
+        
+    except sqlite3.Error as e:
+        print(f"Atomik olay getirme hatası: {e}")
+        return []
+    finally:
+        conn.close()
+
+def get_atomic_events_by_range(start_date, end_date):
+    """
+    Belirtilen tarih aralığındaki tüm atomik olayları getir.
+    
+    Analiz amaçlı sorgulamalar için (örn. "bu haftanın olayları").
+    
+    Args:
+        start_date: Başlangıç tarihi (datetime nesnesi)
+        end_date: Bitiş tarihi (datetime nesnesi)
+    
+    Returns:
+        Olaylar listesi
+    """
+    conn = create_connection()
+    if not conn:
+        return []
+    
+    try:
+        cursor = conn.cursor()
+        # ISO format'a dönüştür
+        start_str = start_date.isoformat()
+        end_str = end_date.isoformat()
+        
+        cursor.execute("""
+            SELECT id, session_id, event_type, elapsed_seconds, timestamp, metadata, created_at
+            FROM atomic_events
+            WHERE timestamp >= ? AND timestamp <= ?
+            ORDER BY timestamp ASC, id ASC
+        """, (start_str, end_str))
+        
+        events = []
+        import json
+        for row in cursor.fetchall():
+            metadata = json.loads(row['metadata']) if row['metadata'] else {}
+            
+            events.append({
+                'id': row['id'],
+                'session_id': row['session_id'],
+                'event_type': row['event_type'],
+                'elapsed_seconds': row['elapsed_seconds'],
+                'timestamp': row['timestamp'],
+                'metadata': metadata,
+                'created_at': row['created_at']
+            })
+        
+        return events
+        
+    except sqlite3.Error as e:
+        print(f"Tarih aralığı olay getirme hatası: {e}")
+        return []
+    finally:
+        conn.close()
+
+def get_interruption_events(session_id):
+    """
+    Belirli bir oturumdaki kesinti olaylarını getir.
+    
+    Sadece 'interruption_detected' türü olayları filtreler.
+    
+    Args:
+        session_id: Oturum ID'si
+    
+    Returns:
+        Kesinti olayları listesi
+    """
+    all_events = get_atomic_events(session_id)
+    return [e for e in all_events if e['event_type'] == 'interruption_detected']
+
+def get_focus_shift_events(session_id):
+    """
+    Belirli bir oturumdaki fokus değişim olaylarını getir.
+    
+    Sadece 'focus_shift_detected' türü olayları filtreler.
+    
+    Args:
+        session_id: Oturum ID'si
+    
+    Returns:
+        Fokus değişim olayları listesi
+    """
+    all_events = get_atomic_events(session_id)
+    return [e for e in all_events if e['event_type'] == 'focus_shift_detected']
+
+def get_distraction_events(session_id):
+    """
+    Belirli bir oturumdaki dikkati dağıtıcı olayları getir.
+    
+    Sadece 'distraction_identified' türü olayları filtreler.
+    
+    Args:
+        session_id: Oturum ID'si
+    
+    Returns:
+        Dikkati dağıtıcı olaylar listesi
+    """
+    all_events = get_atomic_events(session_id)
+    return [e for e in all_events if e['event_type'] == 'distraction_identified']
+
+def delete_atomic_events_for_session(session_id):
+    """
+    Bir oturumun tüm atomik olaylarını sil (cascade delete).
+    
+    Oturum silindiğinde ilişkili olayları da silmek için kullanılır.
+    
+    Args:
+        session_id: Oturum ID'si
+    
+    Returns:
+        True başarılı, False hata
+    """
+    conn = create_connection()
+    if not conn:
+        return False
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM atomic_events WHERE session_id = ?", (session_id,))
+        conn.commit()
+        print(f"✅ Oturum {session_id} için tüm atomik olaylar silindi.")
+        return True
+    except sqlite3.Error as e:
+        print(f"Atomik olay silme hatası: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_event_statistics_for_session(session_id):
+    """
+    Bir oturum için atomik olay istatistiklerini getir.
+    
+    Kaç kesinti, kaç fokus değişimi vb. bilgisini hızlıca almak için.
+    
+    Args:
+        session_id: Oturum ID'si
+    
+    Returns:
+        İstatistikler sözlüğü:
+        {
+            'total_events': 42,
+            'interruptions': 3,
+            'focus_shifts': 5,
+            'distractions': 2,
+            'environment_changes': 1,
+            'breaks': 0,
+            'event_types': {...}
+        }
+    """
+    events = get_atomic_events(session_id)
+    
+    stats = {
+        'total_events': len(events),
+        'interruptions': 0,
+        'focus_shifts': 0,
+        'distractions': 0,
+        'environment_changes': 0,
+        'breaks': 0,
+        'event_types': {}
+    }
+    
+    for event in events:
+        event_type = event['event_type']
+        stats['event_types'][event_type] = stats['event_types'].get(event_type, 0) + 1
+        
+        if event_type == 'interruption_detected':
+            stats['interruptions'] += 1
+        elif event_type == 'focus_shift_detected':
+            stats['focus_shifts'] += 1
+        elif event_type == 'distraction_identified':
+            stats['distractions'] += 1
+        elif event_type == 'environment_changed':
+            stats['environment_changes'] += 1
+        elif event_type in ('break_started', 'break_ended'):
+            stats['breaks'] += 1
+    
+    return stats
