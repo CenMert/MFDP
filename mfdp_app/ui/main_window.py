@@ -79,7 +79,7 @@ class MainWindow(QMainWindow):
         
         # Toggle butonu
         self.btn_toggle_mode = QPushButton("Count Down")
-        self.btn_toggle_mode.setFixedSize(120, 30)
+        self.btn_toggle_mode.setFixedSize(250, 40)
         self.btn_toggle_mode.setCursor(Qt.PointingHandCursor)
         self.btn_toggle_mode.clicked.connect(self.toggle_timer_mode)
         self.btn_toggle_mode.setStyleSheet("""
@@ -288,7 +288,7 @@ class MainWindow(QMainWindow):
         # Mod değiştir
         if self.timer_mode == "countdown":
             self.timer_mode = "countup"
-            self.btn_toggle_mode.setText("Count Up")
+            self.btn_toggle_mode.setText("Count Up - Free Timer")
             
             # Countdown UI'ını gizle
             self.lbl_status.setVisible(False)
@@ -310,7 +310,7 @@ class MainWindow(QMainWindow):
             self.timer_logic = self.timer_logic_countup
         else:
             self.timer_mode = "countdown"
-            self.btn_toggle_mode.setText("Count Down")
+            self.btn_toggle_mode.setText("Count Down - Pomodoro")
             
             # Countup UI'ını gizle
             self.lbl_status_countup.setVisible(False)

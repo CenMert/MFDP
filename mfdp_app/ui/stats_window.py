@@ -225,11 +225,11 @@ class StatsWindow(QDialog):
             ax = fig.add_subplot(111)
 
             # Renkler: Yeşil (Deep), Sarı (Moderate), Kırmızı (Distracted)
-            colors = ['#a6e3a1', '#f9e2af', '#f38ba8']
+            colors = ["#175611", "#7e5f1c", "#821628"]
 
             wedges, texts, autotexts = ax.pie(sizes, labels=labels, autopct='%1.1f%%', 
                                             startangle=90, colors=colors,
-                                            textprops=dict(color="#cdd6f4"))
+                                            textprops=dict(color="#C3CDEF"))
 
             ax.set_title("Odaklanma Kalitesi", color='#cdd6f4', fontsize=12)
 
