@@ -269,26 +269,64 @@ class StatsWindow(QDialog):
 
         data = np.array(matrix)
 
-        fig = self._create_figure()
-        ax = fig.add_subplot(111)
-        im = ax.imshow(data, aspect='auto', cmap='magma', origin='upper')
+        # Create figure with TWO subplots: heatmap + bar chart
+        fig = Figure(figsize=(14, 6), dpi=100, facecolor='#1e1e2e')
+        
+        # Left: Heatmap
+        ax1 = fig.add_subplot(121)
+        im = ax1.imshow(data, aspect='auto', cmap='YlOrRd', origin='upper', interpolation='nearest')
 
-        ax.set_yticks(range(len(day_labels)))
-        ax.set_yticklabels(day_labels, color='#bac2de')
-        ax.set_xticks(range(0, 24, 3))
-        ax.set_xticklabels([str(h) for h in range(0, 24, 3)], color='#bac2de')
-        ax.set_xlabel("Saat", color='#bac2de')
-        ax.set_ylabel("Gün", color='#bac2de')
-        ax.set_title("Olay Yoğunluğu Isı Haritası", color='#cdd6f4', fontsize=12, pad=12)
-        ax.tick_params(axis='both', colors='#bac2de')
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_color('#45475a')
-        ax.spines['left'].set_color('#45475a')
+        ax1.set_yticks(range(len(day_labels)))
+        ax1.set_yticklabels(day_labels, color='#bac2de', fontsize=9)
+        ax1.set_xticks(range(0, 24, 2))
+        ax1.set_xticklabels([f"{h:02d}:00" for h in range(0, 24, 2)], color='#bac2de', fontsize=8, rotation=45)
+        ax1.set_xlabel("Saat", color='#bac2de', fontsize=10)
+        ax1.set_ylabel("Gün", color='#bac2de', fontsize=10)
+        ax1.set_title("Saatlik Olay Dağılımı", color='#cdd6f4', fontsize=12, pad=12, fontweight='bold')
+        ax1.tick_params(axis='both', colors='#bac2de')
+        ax1.spines['top'].set_visible(False)
+        ax1.spines['right'].set_visible(False)
+        ax1.spines['bottom'].set_color('#45475a')
+        ax1.spines['left'].set_color('#45475a')
 
-        cbar = fig.colorbar(im, ax=ax, shrink=0.8)
+        cbar = fig.colorbar(im, ax=ax1, shrink=0.8)
         cbar.ax.yaxis.set_tick_params(color='#bac2de')
         plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='#bac2de')
+        cbar.set_label("Olay Sayısı", color='#bac2de')
+
+        # Right: Hourly Summary (Bar chart)
+        ax2 = fig.add_subplot(122)
+        hourly_totals = np.sum(data, axis=0)  # Sum across all days for each hour
+        hours = np.arange(24)
+        
+        bars = ax2.bar(hours, hourly_totals, color='#f38ba8', alpha=0.7, edgecolor='#f5c2e7', linewidth=1.5)
+        
+        # Highlight top 3 hours
+        top_3_indices = np.argsort(hourly_totals)[-3:]
+        for idx in top_3_indices:
+            bars[idx].set_color('#f9e2af')
+            bars[idx].set_edgecolor('#f9e2af')
+        
+        ax2.set_xlabel("Saat", color='#bac2de', fontsize=10)
+        ax2.set_ylabel("Toplam Olay", color='#bac2de', fontsize=10)
+        ax2.set_title("Saat Bazlı Toplam Olay", color='#cdd6f4', fontsize=12, pad=12, fontweight='bold')
+        ax2.set_xticks(range(0, 24, 3))
+        ax2.set_xticklabels([f"{h:02d}" for h in range(0, 24, 3)], color='#bac2de', fontsize=9)
+        ax2.tick_params(axis='y', colors='#bac2de')
+        ax2.set_facecolor('#1e1e2e')
+        ax2.spines['top'].set_visible(False)
+        ax2.spines['right'].set_visible(False)
+        ax2.spines['bottom'].set_color('#45475a')
+        ax2.spines['left'].set_color('#45475a')
+        ax2.grid(color='#45475a', linestyle='--', linewidth=0.5, alpha=0.5, axis='y')
+
+        # Add value labels on top of bars
+        for bar in bars:
+            height = bar.get_height()
+            if height > 0:
+                ax2.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{int(height)}',
+                        ha='center', va='bottom', color='#cdd6f4', fontsize=7)
 
         fig.tight_layout()
         self.atomic_heatmap_canvas = FigureCanvas(fig)
