@@ -1,11 +1,11 @@
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QWidget, QScrollArea, QHBoxLayout)
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QWidget, QScrollArea, QHBoxLayout, QComboBox)
 from PySide6.QtCore import Qt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 from mfdp_app.db_manager import (
     get_daily_trend_v2, get_hourly_productivity_v2, get_completion_rate_v2, 
-    get_focus_quality_stats, get_all_tags, get_daily_trend_by_tag
+    get_focus_quality_stats, get_all_tags, get_daily_trend_by_tag, get_atomic_event_heatmap
 )
 import numpy as np
 
@@ -33,10 +33,23 @@ class StatsWindow(QDialog):
         main_layout.addWidget(scroll)
 
         self.init_header()
+        # State for atomic heatmap (set before rendering)
+        self.atomic_filter_options = [
+            ("Tüm Olaylar", None),
+            ("Kesintiler", ["interruption_detected"]),
+            ("Fokus Değişimleri", ["focus_shift_detected"]),
+            ("Dikkat Dağıtıcılar", ["distraction_identified"]),
+            ("Milestones", ["milestone_reached"]),
+            ("DND / Çevre", ["dnd_toggled", "environment_changed"]),
+        ]
+        self.atomic_heatmap_canvas = None
+        self.atomic_no_data_label = None
+
         self.init_daily_chart()
         self.init_daily_chart_by_tag()
         self.init_tag_distribution()
         self.init_hourly_chart()
+        self.init_atomic_heatmap_section()
         self.init_quality_section()
 
     def init_header(self):
@@ -207,6 +220,79 @@ class StatsWindow(QDialog):
         ax.set_xticks(range(0, 24, 3))
         fig.tight_layout()
         self.layout.addWidget(canvas)
+
+    def init_atomic_heatmap_section(self):
+        container = QWidget()
+        vbox = QVBoxLayout(container)
+        vbox.setSpacing(10)
+
+        lbl = QLabel("Atomic Olay Isı Haritası (Son 14 Gün)")
+        lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #cdd6f4;")
+        vbox.addWidget(lbl)
+
+        # Filter dropdown
+        self.atomic_filter = QComboBox()
+        self.atomic_filter.setStyleSheet("background-color: #313244; color: #cdd6f4; padding: 6px;")
+        for label, _ in self.atomic_filter_options:
+            self.atomic_filter.addItem(label)
+        self.atomic_filter.currentIndexChanged.connect(self._render_atomic_heatmap)
+        vbox.addWidget(self.atomic_filter)
+
+        # Placeholder for heatmap canvas / no-data label
+        self.atomic_heatmap_container = vbox
+        self._render_atomic_heatmap()
+
+        self.layout.addWidget(container)
+
+    def _render_atomic_heatmap(self):
+        # Clean previous widgets
+        if self.atomic_heatmap_canvas:
+            self.atomic_heatmap_canvas.setParent(None)
+            self.atomic_heatmap_canvas.deleteLater()
+            self.atomic_heatmap_canvas = None
+        if self.atomic_no_data_label:
+            self.atomic_no_data_label.setParent(None)
+            self.atomic_no_data_label.deleteLater()
+            self.atomic_no_data_label = None
+
+        idx = self.atomic_filter.currentIndex() if hasattr(self, 'atomic_filter') else 0
+        _, event_types = self.atomic_filter_options[idx]
+
+        day_labels, matrix = get_atomic_event_heatmap(days=14, event_types=event_types)
+
+        # No data case
+        if not matrix or not day_labels:
+            self.atomic_no_data_label = QLabel("Görüntülenecek veri yok.")
+            self.atomic_no_data_label.setStyleSheet("color: #bac2de; padding: 8px;")
+            self.atomic_heatmap_container.addWidget(self.atomic_no_data_label)
+            return
+
+        data = np.array(matrix)
+
+        fig = self._create_figure()
+        ax = fig.add_subplot(111)
+        im = ax.imshow(data, aspect='auto', cmap='magma', origin='upper')
+
+        ax.set_yticks(range(len(day_labels)))
+        ax.set_yticklabels(day_labels, color='#bac2de')
+        ax.set_xticks(range(0, 24, 3))
+        ax.set_xticklabels([str(h) for h in range(0, 24, 3)], color='#bac2de')
+        ax.set_xlabel("Saat", color='#bac2de')
+        ax.set_ylabel("Gün", color='#bac2de')
+        ax.set_title("Olay Yoğunluğu Isı Haritası", color='#cdd6f4', fontsize=12, pad=12)
+        ax.tick_params(axis='both', colors='#bac2de')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_color('#45475a')
+        ax.spines['left'].set_color('#45475a')
+
+        cbar = fig.colorbar(im, ax=ax, shrink=0.8)
+        cbar.ax.yaxis.set_tick_params(color='#bac2de')
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='#bac2de')
+
+        fig.tight_layout()
+        self.atomic_heatmap_canvas = FigureCanvas(fig)
+        self.atomic_heatmap_container.addWidget(self.atomic_heatmap_canvas)
     
     def init_quality_section(self):
         # Yatay düzen: Solda Grafik, Sağda Sözel Özet

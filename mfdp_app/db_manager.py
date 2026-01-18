@@ -945,3 +945,58 @@ def get_event_statistics_for_session(session_id):
             stats['breaks'] += 1
     
     return stats
+
+
+def get_atomic_event_heatmap(days=14, event_types=None):
+    """
+    Aggregate atomic events into a day x hour heatmap for recent days.
+    Args:
+        days: how many days back from today (inclusive)
+        event_types: iterable of event_type strings to filter; None for all
+    Returns:
+        (day_labels, matrix) where matrix is a 2D list [day_index][hour]
+    """
+    conn = create_connection()
+    if not conn:
+        return [], []
+    try:
+        cursor = conn.cursor()
+
+        # Build date range (inclusive today, back `days-1` days)
+        day_dates = [datetime.date.today() - datetime.timedelta(days=i) for i in range(days-1, -1, -1)]
+        day_map = {d.strftime('%Y-%m-%d'): idx for idx, d in enumerate(day_dates)}
+        matrix = [[0 for _ in range(24)] for _ in range(days)]
+
+        # Build query with optional event_type filter
+        params = [f'-{days-1} days']
+        event_filter = ""
+        if event_types:
+            placeholders = ",".join(["?"] * len(event_types))
+            event_filter = f"AND event_type IN ({placeholders})"
+            params.extend(event_types)
+
+        query = f"""
+            SELECT strftime('%Y-%m-%d', timestamp) AS day,
+                   CAST(strftime('%H', timestamp) AS INTEGER) AS hour,
+                   COUNT(*) AS cnt
+            FROM atomic_events
+            WHERE timestamp >= date('now', ?, 'localtime')
+            {event_filter}
+            GROUP BY day, hour
+            ORDER BY day ASC, hour ASC
+        """
+
+        cursor.execute(query, params)
+        for row in cursor.fetchall():
+            day_key = row['day']
+            hour = row['hour']
+            if day_key in day_map and 0 <= hour <= 23:
+                matrix[day_map[day_key]][hour] = row['cnt']
+
+        day_labels = [d.strftime('%d %b') for d in day_dates]
+        return day_labels, matrix
+    except Exception as e:
+        print(f"Atomic heatmap query error: {e}")
+        return [], []
+    finally:
+        conn.close()
