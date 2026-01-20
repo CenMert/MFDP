@@ -4,8 +4,9 @@ from mfdp_app.ui.styles import MODERN_DARK_THEME
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import qInstallMessageHandler
 from mfdp_app.ui.main_window import MainWindow
-# Veritabanı başlatmayı şimdilik yorum satırı yapabiliriz veya aktif tutabiliriz
-from mfdp_app.db_manager import create_connection, setup_database
+# Database initialization
+from mfdp_app.db.database_initializer import DatabaseInitializer
+from mfdp_app.db.base_repository import BaseRepository
 
 def message_handler(msg_type, context, message):
     """FFmpeg ve VDPAU uyarılarını bastırır"""
@@ -17,17 +18,14 @@ def main():
     # Qt Multimedia uyarılarını bastır
     os.environ.setdefault('QT_LOGGING_RULES', 'qt.multimedia.*=false')
     qInstallMessageHandler(message_handler)
-    # 1. Veritabanını hazırla
-    conn = create_connection()
-    if conn:
-        setup_database(conn)
-        conn.close()
-
-    # 2. Uygulamayı başlat
-    app = QApplication(sys.argv)
-    app.setStyleSheet(MODERN_DARK_THEME) # <--- Stili burada yüklüyoruz
     
-    # İleride buraya stil dosyası (QSS) yükleyeceğiz
+    # 1. Initialize database with connection pooling
+    BaseRepository.initialize_pool(pool_size=5)
+    DatabaseInitializer.setup_database()
+    
+    # 2. Start application
+    app = QApplication(sys.argv)
+    app.setStyleSheet(MODERN_DARK_THEME)
     
     window = MainWindow()
     window.show()

@@ -3,10 +3,9 @@ from PySide6.QtCore import Qt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
-from mfdp_app.db_manager import (
-    get_daily_trend_v2, get_hourly_productivity_v2, get_completion_rate_v2, 
-    get_focus_quality_stats, get_all_tags, get_daily_trend_by_tag, get_atomic_event_heatmap
-)
+from mfdp_app.db.session_repository import SessionRepository
+from mfdp_app.db.tag_repository import TagRepository
+from mfdp_app.db.atomic_event_repository import AtomicEventRepository
 import numpy as np
 
 class StatsWindow(QDialog):
@@ -53,7 +52,7 @@ class StatsWindow(QDialog):
         self.init_quality_section()
 
     def init_header(self):
-        stats = get_completion_rate_v2()
+        stats = SessionRepository.get_completion_rate()
         total = stats['completed'] + stats['interrupted']
         rate = int((stats['completed'] / total * 100)) if total > 0 else 0
         header_text = f"Tamamlama Oranı: %{rate} ({stats['completed']} Tam / {total} Toplam)"
@@ -81,7 +80,7 @@ class StatsWindow(QDialog):
         ax.grid(color='#45475a', linestyle='--', linewidth=0.5, alpha=0.5)
 
     def init_daily_chart(self):
-        data = get_daily_trend_v2(7)
+        data = SessionRepository.get_daily_trend(days=7)
         days = [x[0] for x in data]
         minutes = [x[1] for x in data]
 
@@ -101,7 +100,7 @@ class StatsWindow(QDialog):
     
     def init_daily_chart_by_tag(self):
         """Tag bazlı günlük trend grafiği (grouped bar chart)."""
-        tags = get_all_tags()
+        tags = TagRepository.get_all_tags()
         if not tags:
             return  # Tag yoksa grafik gösterme
         
@@ -110,7 +109,7 @@ class StatsWindow(QDialog):
         days_set = set()
         for tag_info in tags:
             tag = tag_info['name']
-            data = get_daily_trend_by_tag(tag, 7)
+            data = TagRepository.get_daily_trend_by_tag(tag, days=7)
             tag_data[tag] = {day: minutes for day, minutes in data}
             days_set.update([day for day, _ in data])
         
@@ -168,9 +167,7 @@ class StatsWindow(QDialog):
     
     def init_tag_distribution(self):
         """Tag bazlı zaman dağılımı pasta grafiği."""
-        from mfdp_app.db_manager import get_tag_time_summary
-        
-        tags = get_all_tags()
+        tags = TagRepository.get_all_tags()
         if not tags:
             return
         
@@ -178,7 +175,7 @@ class StatsWindow(QDialog):
         tag_times = {}
         for tag_info in tags:
             tag = tag_info['name']
-            total_minutes = get_tag_time_summary(tag)
+            total_minutes = TagRepository.get_tag_time_summary(tag)
             if total_minutes > 0:
                 tag_times[tag] = {
                     'minutes': total_minutes,
@@ -208,7 +205,7 @@ class StatsWindow(QDialog):
         self.layout.addWidget(canvas)
 
     def init_hourly_chart(self):
-        hours_data = get_hourly_productivity_v2()
+        hours_data = SessionRepository.get_hourly_productivity()
         hours = list(range(24))
         
         fig = self._create_figure()
@@ -258,7 +255,7 @@ class StatsWindow(QDialog):
         idx = self.atomic_filter.currentIndex() if hasattr(self, 'atomic_filter') else 0
         _, event_types = self.atomic_filter_options[idx]
 
-        day_labels, matrix = get_atomic_event_heatmap(days=14, event_types=event_types)
+        day_labels, matrix = AtomicEventRepository.get_heatmap(days=14, event_types=event_types)
 
         # No data case
         if not matrix or not day_labels:
@@ -338,7 +335,7 @@ class StatsWindow(QDialog):
         layout = QHBoxLayout(container)
 
         # 1. Pasta Grafik (Pie Chart)
-        stats = get_focus_quality_stats()
+        stats = SessionRepository.get_focus_quality_stats()
         labels = list(stats.keys())
         sizes = list(stats.values())
 

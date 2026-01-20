@@ -2,7 +2,8 @@ import datetime
 from dataclasses import dataclass, field
 from typing import Optional, List
 from PySide6.QtCore import QTimer, QObject, Signal
-from mfdp_app.db_manager import log_session_v2, load_settings 
+from mfdp_app.db.session_repository import SessionRepository
+from mfdp_app.db.settings_repository import SettingsRepository 
 
 
 """
@@ -225,7 +226,7 @@ class PmdrCountdownTimer(QObject):
     
     def reload_settings(self):
         """Ayarları yeniden yükle"""
-        settings = load_settings()
+        settings = SettingsRepository.load_settings()
         if 'focus_duration' in settings:
             self.durations["Focus"] = int(settings['focus_duration'])
         if 'short_break_duration' in settings:
@@ -313,12 +314,12 @@ class PmdrCountdownTimer(QObject):
         session_dict = self.current_session.to_db_dict(end_time, task_name, category)
         
         # DB'ye kaydet (mevcut fonksiyonu kullan)
-        log_session_v2(
+        SessionRepository.log_session(
             start_time=session_dict['start_time'],
             end_time=session_dict['end_time'],
-            duration_sec=session_dict['duration_seconds'],
-            planned_min=session_dict['planned_duration_minutes'],
-            mode=session_dict['mode'],
+            duration_seconds=session_dict['duration_seconds'],
+            planned_duration=session_dict['planned_duration_minutes'] * 60 if session_dict['planned_duration_minutes'] else None,
+            session_mode=session_dict['mode'],
             completed=completed,
             task_name=session_dict['task_name'],
             category=session_dict['category'],
@@ -504,12 +505,12 @@ class CountUpTimer(QObject):
         session_dict = self.current_session.to_db_dict(end_time, task_name, category)
         
         # DB'ye kaydet (planned_min=None olarak gönder)
-        log_session_v2(
+        SessionRepository.log_session(
             start_time=session_dict['start_time'],
             end_time=session_dict['end_time'],
-            duration_sec=session_dict['duration_seconds'],
-            planned_min=None,  # Count-up'da planlanan süre yok
-            mode="Free Timer",
+            duration_seconds=session_dict['duration_seconds'],
+            planned_duration=None,  # Count-up'da planlanan süre yok
+            session_mode="Free Timer",
             completed=completed,
             task_name=session_dict['task_name'],
             category=session_dict['category'],
@@ -621,7 +622,7 @@ class PomodoroTimer(QObject):
         self._emit_time()
         
     def reload_settings(self):
-        settings = load_settings()
+        settings = SettingsRepository.load_settings()
         if 'focus_duration' in settings:
             self.durations["Focus"] = int(settings['focus_duration'])
         if 'short_break_duration' in settings:
@@ -679,12 +680,12 @@ class PomodoroTimer(QObject):
         if self.task_manager and self.current_task_id:
             task_name, category = self.task_manager.get_task_name_and_tag()
         
-        log_session_v2(
+        SessionRepository.log_session(
             start_time=self.session_start_time,
             end_time=end_time,
-            duration_sec=int(actual_duration),
-            planned_min=self.planned_minutes,
-            mode=self.current_state,
+            duration_seconds=int(actual_duration),
+            planned_duration=self.planned_minutes * 60 if self.planned_minutes else None,
+            session_mode=self.current_state,
             completed=completed,
             task_name=task_name,
             category=category,

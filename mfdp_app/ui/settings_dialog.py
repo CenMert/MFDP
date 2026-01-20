@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QSpinBox, 
                                QPushButton, QHBoxLayout, QFormLayout)
 from PySide6.QtCore import Qt
-from mfdp_app.db_manager import load_settings, save_setting
+from mfdp_app.db.settings_repository import SettingsRepository
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
@@ -49,7 +49,7 @@ class SettingsDialog(QDialog):
         self.load_current_values()
 
     def load_current_values(self):
-        settings = load_settings()
+        settings = SettingsRepository.load_settings()
         # Veritabanında yoksa varsayılanları (25, 5, 15) kullan
         self.spin_focus.setValue(int(settings.get('focus_duration', 25)))
         self.spin_short.setValue(int(settings.get('short_break_duration', 5)))
@@ -57,8 +57,8 @@ class SettingsDialog(QDialog):
 
     def save_values(self):
         # Değerleri Veritabanına Yaz
-        save_setting('focus_duration', self.spin_focus.value())
-        save_setting('short_break_duration', self.spin_short.value())
-        save_setting('long_break_duration', self.spin_long.value())
+        SettingsRepository.save_setting('focus_duration', self.spin_focus.value())
+        SettingsRepository.save_setting('short_break_duration', self.spin_short.value())
+        SettingsRepository.save_setting('long_break_duration', self.spin_long.value())
         
         self.accept() # Pencereyi kapat ve 'kabul edildi' sinyali ver

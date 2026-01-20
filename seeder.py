@@ -6,7 +6,8 @@ import json
 from enum import Enum
 import sys
 sys.path.insert(0, '/home/kaz/Projects/MFDP')
-from mfdp_app.db_manager import setup_database
+from mfdp_app.db.database_initializer import DatabaseInitializer
+from mfdp_app.db.base_repository import BaseRepository
 DB_NAME = 'focus_tracker.db'
 
 class EventType(Enum):
@@ -96,7 +97,8 @@ def seed_database():
     """
     conn = create_connection()
     # Ensure schema exists before seeding
-    setup_database(conn)
+    BaseRepository.initialize_pool(pool_size=5)
+    DatabaseInitializer.setup_database()
     cursor = conn.cursor()
     
     print("🌱 Seeding database with AtomicAnalyzer events...")
