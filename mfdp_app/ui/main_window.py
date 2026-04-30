@@ -337,9 +337,11 @@ class MainWindow(QMainWindow):
         is_running = self.timer_logic_countdown.start_stop()
 
         if is_running:
+            self.notifier.play_start_counter_sound()
             self.btn_start.setText("Duraklat")
             self.check_dnd_status() # Timer başladı, DND gerekirse aç
         else:
+            self.notifier.play_pause_counter_sound()
             self.btn_start.setText("Devam Et")
             self.dnd_manager.disable_dnd() # Duraklatılınca bildirimler gelsin
     
@@ -348,8 +350,10 @@ class MainWindow(QMainWindow):
         is_running = self.timer_logic_countup.start_stop()
         
         if is_running:
+            self.notifier.play_start_counter_sound()
             self.btn_start_countup.setText("Duraklat")
         else:
+            self.notifier.play_pause_counter_sound()
             self.btn_start_countup.setText("Devam Et")
     
     def reset_timer_countup(self):
@@ -435,7 +439,10 @@ class MainWindow(QMainWindow):
     def open_tasks(self):
         """Task yönetim penceresini aç."""
         if self.task_window is None or not self.task_window.isVisible():
+            if self.task_window is not None:
+                self.task_window.deleteLater()
             self.task_window = TaskWindow(self.task_manager, self)
+            self.task_window.setAttribute(Qt.WA_DeleteOnClose)
             self.task_window.task_selected_signal.connect(self.on_task_selected_from_dialog)
             self.task_window.setModal(False)  # Non-modal yap
             self.task_window.show()
@@ -459,8 +466,9 @@ class MainWindow(QMainWindow):
     def open_stats(self):
         """İstatistik penceresini aç."""
         if self.stats_window is None or not self.stats_window.isVisible():
+            if self.stats_window is not None:
+                self.stats_window.deleteLater()
             self.stats_window = StatsWindow(self)
-            self.stats_window.setModal(False)  # Non-modal yap
             self.stats_window.show()
         else:
             # Zaten açıksa öne getir
@@ -470,8 +478,10 @@ class MainWindow(QMainWindow):
     def open_recursive_tasks(self):
         """Özyinelemeli görev yönetim penceresini aç."""
         if self.recursive_task_window is None or not self.recursive_task_window.isVisible():
+            if self.recursive_task_window is not None:
+                self.recursive_task_window.deleteLater()
             self.recursive_task_window = RecursiveTaskWindow(self)
-            # setModal(False) zaten __init__ içinde yapılıyor
+            self.recursive_task_window.setAttribute(Qt.WA_DeleteOnClose)
             self.recursive_task_window.show()
         else:
             # Zaten açıksa öne getir

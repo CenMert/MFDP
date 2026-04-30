@@ -15,6 +15,10 @@ class Notifier(QObject):
         self.chime_sound = self._load_sound('chime.wav')
         self.gong_sound = self._load_sound('gong.wav')
 
+        # Ill add pen drop and writing sound for the start and stop.
+        self.write_pen_sound = self._load_sound('write_pen_sound.wav')
+        self.clo_pen_sound = self._load_sound('close_pen_sound.wav')
+
         self.last_triggered_minute = -1
         
         # YENİ: Varsayılan olarak açık
@@ -44,6 +48,21 @@ class Notifier(QObject):
             self.alarm_sound.play()
         else:
             print('\a') 
+
+    def _play_effect(self, effect: QSoundEffect):
+        """QSoundEffect'i güvenli şekilde tekrar tetikleyerek çal."""
+        if effect.source().isValid():
+            # Aynı sesi art arda tetiklemek için önce durdur, sonra başlat.
+            effect.stop()
+            effect.play()
+
+    def play_start_counter_sound(self):
+        """Sayaç başlat/devam et sesi."""
+        self._play_effect(self.write_pen_sound)
+
+    def play_pause_counter_sound(self):
+        """Sayaç duraklat sesi."""
+        self._play_effect(self.clo_pen_sound)
 
     def play_gong(self):
         print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] ===GONG!===")

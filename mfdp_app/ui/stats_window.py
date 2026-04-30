@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QWidget, QScrollArea, QHBoxLayout, QComboBox)
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QWidget, 
+                               QScrollArea, QHBoxLayout, QComboBox, QTabWidget)
 from PySide6.QtCore import Qt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -7,6 +8,7 @@ from mfdp_app.db.session_repository import SessionRepository
 from mfdp_app.db.tag_repository import TagRepository
 from mfdp_app.db.atomic_event_repository import AtomicEventRepository
 import numpy as np
+
 
 class StatsWindow(QDialog):
     def __init__(self, parent=None):
@@ -17,21 +19,9 @@ class StatsWindow(QDialog):
         
         # Non-modal yap - arka plandaki pencereyi kullanılabilir tut
         self.setModal(False)
+        # Kapanınca belleği otomatik serbest bırak
+        self.setAttribute(Qt.WA_DeleteOnClose)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("border: none;") 
-        container = QWidget()
-        scroll.setWidget(container)
-        
-        self.layout = QVBoxLayout(container)
-        self.layout.setSpacing(30)
-        self.layout.setContentsMargins(20, 20, 20, 20)
-        
-        main_layout = QVBoxLayout(self)
-        main_layout.addWidget(scroll)
-
-        self.init_header()
         # State for atomic heatmap (set before rendering)
         self.atomic_filter_options = [
             ("Tüm Olaylar", None),
@@ -44,14 +34,48 @@ class StatsWindow(QDialog):
         self.atomic_heatmap_canvas = None
         self.atomic_no_data_label = None
 
-        self.init_daily_chart()
-        self.init_daily_chart_by_tag()
-        self.init_tag_distribution()
-        self.init_hourly_chart()
-        self.init_atomic_heatmap_section()
-        self.init_quality_section()
+        # Track active figures/canvases for cleanup
+        self._active_figures = []
 
-    def init_header(self):
+        main_layout = QVBoxLayout(self)
+
+        # Header (lightweight, always visible)
+        self.init_header(main_layout)
+
+        # Tab widget for lazy chart loading
+        self.tabs = QTabWidget()
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane { border: 1px solid #45475a; background-color: #1e1e2e; }
+            QTabBar::tab { background: #313244; color: #bac2de; padding: 8px 16px; 
+                           border: 1px solid #45475a; border-bottom: none; border-radius: 4px 4px 0 0; margin-right: 2px; }
+            QTabBar::tab:selected { background: #45475a; color: #cdd6f4; font-weight: bold; }
+            QTabBar::tab:hover { background: #585b70; }
+        """)
+        main_layout.addWidget(self.tabs)
+
+        # Tab definitions: (title, builder_method)
+        self._tab_builders = [
+            ("Günlük Trend", self._build_daily_chart),
+            ("Tag Bazlı", self._build_daily_chart_by_tag),
+            ("Tag Dağılımı", self._build_tag_distribution),
+            ("Saatlik", self._build_hourly_chart),
+            ("Atomic Harita", self._build_atomic_heatmap_section),
+            ("Kalite", self._build_quality_section),
+        ]
+        self._tab_loaded = {}
+
+        for title, _ in self._tab_builders:
+            placeholder = QWidget()
+            placeholder.setLayout(QVBoxLayout())
+            self.tabs.addTab(placeholder, title)
+            self._tab_loaded[title] = False
+
+        # Connect tab change -> lazy load
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+        # Load the first tab
+        self._on_tab_changed(0)
+
+    def init_header(self, parent_layout):
         stats = SessionRepository.get_completion_rate()
         total = stats['completed'] + stats['interrupted']
         rate = int((stats['completed'] / total * 100)) if total > 0 else 0
@@ -60,11 +84,40 @@ class StatsWindow(QDialog):
         lbl = QLabel(header_text)
         lbl.setStyleSheet("font-size: 18px; font-weight: bold; color: #a6e3a1; padding: 10px; background-color: #313244; border-radius: 8px;")
         lbl.setAlignment(Qt.AlignCenter)
-        self.layout.addWidget(lbl)
+        parent_layout.addWidget(lbl)
 
-    def _create_figure(self):
-        fig = Figure(figsize=(6, 4), dpi=100, facecolor='#1e1e2e')
+    # =========================================================================
+    # LAZY TAB LOADING
+    # =========================================================================
+
+    def _on_tab_changed(self, index):
+        """Load chart content only when the tab is first selected."""
+        if index < 0 or index >= len(self._tab_builders):
+            return
+        title, builder = self._tab_builders[index]
+        if self._tab_loaded.get(title):
+            return
+        
+        widget = self.tabs.widget(index)
+        layout = widget.layout()
+        
+        # Build the chart into this tab's layout
+        builder(layout)
+        self._tab_loaded[title] = True
+
+    # =========================================================================
+    # CHART HELPERS
+    # =========================================================================
+
+    def _create_figure(self, figsize=(6, 4)):
+        fig = Figure(figsize=figsize, dpi=100, facecolor='#1e1e2e')
+        self._active_figures.append(fig)
         return fig
+
+    def _add_canvas(self, layout, fig):
+        canvas = FigureCanvas(fig)
+        layout.addWidget(canvas)
+        return canvas
 
     def _setup_ax(self, ax, title, xlabel, ylabel):
         ax.set_facecolor('#1e1e2e')
@@ -79,13 +132,16 @@ class StatsWindow(QDialog):
         ax.spines['left'].set_color('#45475a')
         ax.grid(color='#45475a', linestyle='--', linewidth=0.5, alpha=0.5)
 
-    def init_daily_chart(self):
+    # =========================================================================
+    # CHART BUILDERS (called lazily per-tab)
+    # =========================================================================
+
+    def _build_daily_chart(self, layout):
         data = SessionRepository.get_daily_trend(days=7)
         days = [x[0] for x in data]
         minutes = [x[1] for x in data]
 
         fig = self._create_figure()
-        canvas = FigureCanvas(fig)
         ax = fig.add_subplot(111)
         bars = ax.bar(days, minutes, color='#89b4fa', width=0.6, alpha=0.8)
         self._setup_ax(ax, "Son 7 Günlük Trend (Toplam)", "Günler", "Dakika")
@@ -96,13 +152,14 @@ class StatsWindow(QDialog):
                 ax.text(bar.get_x() + bar.get_width()/2., height, f'{int(height)}',
                         ha='center', va='bottom', color='#cdd6f4', fontsize=8)
         fig.tight_layout()
-        self.layout.addWidget(canvas)
+        self._add_canvas(layout, fig)
     
-    def init_daily_chart_by_tag(self):
+    def _build_daily_chart_by_tag(self, layout):
         """Tag bazlı günlük trend grafiği (grouped bar chart)."""
         tags = TagRepository.get_all_tags()
         if not tags:
-            return  # Tag yoksa grafik gösterme
+            layout.addWidget(QLabel("Tag verisi bulunamadı."))
+            return
         
         # Her tag için veri al
         tag_data = {}
@@ -114,14 +171,14 @@ class StatsWindow(QDialog):
             days_set.update([day for day, _ in data])
         
         if not days_set:
-            return  # Veri yoksa gösterme
+            layout.addWidget(QLabel("Görüntülenecek veri yok."))
+            return
         
         days = sorted(list(days_set))
         if not days:
             return
         
         fig = self._create_figure()
-        canvas = FigureCanvas(fig)
         ax = fig.add_subplot(111)
         
         # Tag renklerini al
@@ -131,9 +188,8 @@ class StatsWindow(QDialog):
             tag = tag_info['name']
             tag_colors[tag] = tag_info.get('color') or default_colors[i % len(default_colors)]
         
-        # Grouped bar chart için
         x = np.arange(len(days))
-        width = 0.8 / len(tags)  # Her tag için genişlik
+        width = 0.8 / len(tags)
         
         for i, tag in enumerate(tags):
             tag_name = tag['name']
@@ -142,7 +198,6 @@ class StatsWindow(QDialog):
             bars = ax.bar(x + offset, minutes, width, label=tag_name, 
                          color=tag_colors[tag_name], alpha=0.8)
             
-            # Değerleri göster
             for j, (bar, val) in enumerate(zip(bars, minutes)):
                 if val > 0:
                     ax.text(bar.get_x() + bar.get_width()/2., val, f'{int(val)}',
@@ -163,15 +218,15 @@ class StatsWindow(QDialog):
         ax.grid(color='#45475a', linestyle='--', linewidth=0.5, alpha=0.5, axis='y')
         
         fig.tight_layout()
-        self.layout.addWidget(canvas)
+        self._add_canvas(layout, fig)
     
-    def init_tag_distribution(self):
+    def _build_tag_distribution(self, layout):
         """Tag bazlı zaman dağılımı pasta grafiği."""
         tags = TagRepository.get_all_tags()
         if not tags:
+            layout.addWidget(QLabel("Tag verisi bulunamadı."))
             return
         
-        # Her tag için toplam süre
         tag_times = {}
         for tag_info in tags:
             tag = tag_info['name']
@@ -183,49 +238,43 @@ class StatsWindow(QDialog):
                 }
         
         if not tag_times:
+            layout.addWidget(QLabel("Görüntülenecek veri yok."))
             return
         
-        # Pasta grafik için veri hazırla
         labels = list(tag_times.keys())
         sizes = [tag_times[tag]['minutes'] for tag in labels]
         colors = [tag_times[tag]['color'] for tag in labels]
         
         fig = self._create_figure()
-        canvas = FigureCanvas(fig)
         ax = fig.add_subplot(111)
         
-        wedges, texts, autotexts = ax.pie(sizes, labels=labels, autopct='%1.1f%%',
-                                         startangle=90, colors=colors,
-                                         textprops=dict(color="#cdd6f4"))
+        ax.pie(sizes, labels=labels, autopct='%1.1f%%',
+               startangle=90, colors=colors,
+               textprops=dict(color="#cdd6f4"))
         
         ax.set_title("Tag Bazlı Zaman Dağılımı", color='#cdd6f4', fontsize=12)
         fig.patch.set_facecolor('#1e1e2e')
         
         fig.tight_layout()
-        self.layout.addWidget(canvas)
+        self._add_canvas(layout, fig)
 
-    def init_hourly_chart(self):
+    def _build_hourly_chart(self, layout):
         hours_data = SessionRepository.get_hourly_productivity()
         hours = list(range(24))
         
         fig = self._create_figure()
-        canvas = FigureCanvas(fig)
         ax = fig.add_subplot(111)
         ax.fill_between(hours, hours_data, color='#a6e3a1', alpha=0.2)
         ax.plot(hours, hours_data, color='#a6e3a1', linewidth=2, marker='o', markersize=4)
         self._setup_ax(ax, "Saatlik Verimlilik", "Saat (00-23)", "Toplam Dakika")
         ax.set_xticks(range(0, 24, 3))
         fig.tight_layout()
-        self.layout.addWidget(canvas)
+        self._add_canvas(layout, fig)
 
-    def init_atomic_heatmap_section(self):
-        container = QWidget()
-        vbox = QVBoxLayout(container)
-        vbox.setSpacing(10)
-
+    def _build_atomic_heatmap_section(self, layout):
         lbl = QLabel("Atomic Olay Isı Haritası (Son 14 Gün)")
         lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #cdd6f4;")
-        vbox.addWidget(lbl)
+        layout.addWidget(lbl)
 
         # Filter dropdown
         self.atomic_filter = QComboBox()
@@ -233,17 +282,18 @@ class StatsWindow(QDialog):
         for label, _ in self.atomic_filter_options:
             self.atomic_filter.addItem(label)
         self.atomic_filter.currentIndexChanged.connect(self._render_atomic_heatmap)
-        vbox.addWidget(self.atomic_filter)
+        layout.addWidget(self.atomic_filter)
 
-        # Placeholder for heatmap canvas / no-data label
-        self.atomic_heatmap_container = vbox
+        # Store the layout ref for dynamic canvas insertion
+        self.atomic_heatmap_layout = layout
         self._render_atomic_heatmap()
-
-        self.layout.addWidget(container)
 
     def _render_atomic_heatmap(self):
         # Clean previous widgets
         if self.atomic_heatmap_canvas:
+            self._active_figures = [f for f in self._active_figures 
+                                     if f is not self.atomic_heatmap_canvas.figure]
+            plt.close(self.atomic_heatmap_canvas.figure)
             self.atomic_heatmap_canvas.setParent(None)
             self.atomic_heatmap_canvas.deleteLater()
             self.atomic_heatmap_canvas = None
@@ -261,13 +311,13 @@ class StatsWindow(QDialog):
         if not matrix or not day_labels:
             self.atomic_no_data_label = QLabel("Görüntülenecek veri yok.")
             self.atomic_no_data_label.setStyleSheet("color: #bac2de; padding: 8px;")
-            self.atomic_heatmap_container.addWidget(self.atomic_no_data_label)
+            self.atomic_heatmap_layout.addWidget(self.atomic_no_data_label)
             return
 
         data = np.array(matrix)
 
         # Create figure with TWO subplots: heatmap + bar chart
-        fig = Figure(figsize=(14, 6), dpi=100, facecolor='#1e1e2e')
+        fig = self._create_figure(figsize=(14, 6))
         
         # Left: Heatmap
         ax1 = fig.add_subplot(121)
@@ -293,16 +343,16 @@ class StatsWindow(QDialog):
 
         # Right: Hourly Summary (Bar chart)
         ax2 = fig.add_subplot(122)
-        hourly_totals = np.sum(data, axis=0)  # Sum across all days for each hour
+        hourly_totals = np.sum(data, axis=0)
         hours = np.arange(24)
         
         bars = ax2.bar(hours, hourly_totals, color='#f38ba8', alpha=0.7, edgecolor='#f5c2e7', linewidth=1.5)
         
         # Highlight top 3 hours
         top_3_indices = np.argsort(hourly_totals)[-3:]
-        for idx in top_3_indices:
-            bars[idx].set_color('#f9e2af')
-            bars[idx].set_edgecolor('#f9e2af')
+        for i in top_3_indices:
+            bars[i].set_color('#f9e2af')
+            bars[i].set_edgecolor('#f9e2af')
         
         ax2.set_xlabel("Saat", color='#bac2de', fontsize=10)
         ax2.set_ylabel("Toplam Olay", color='#bac2de', fontsize=10)
@@ -317,7 +367,6 @@ class StatsWindow(QDialog):
         ax2.spines['left'].set_color('#45475a')
         ax2.grid(color='#45475a', linestyle='--', linewidth=0.5, alpha=0.5, axis='y')
 
-        # Add value labels on top of bars
         for bar in bars:
             height = bar.get_height()
             if height > 0:
@@ -327,12 +376,12 @@ class StatsWindow(QDialog):
 
         fig.tight_layout()
         self.atomic_heatmap_canvas = FigureCanvas(fig)
-        self.atomic_heatmap_container.addWidget(self.atomic_heatmap_canvas)
+        self.atomic_heatmap_layout.addWidget(self.atomic_heatmap_canvas)
     
-    def init_quality_section(self):
+    def _build_quality_section(self, layout):
         # Yatay düzen: Solda Grafik, Sağda Sözel Özet
         container = QWidget()
-        layout = QHBoxLayout(container)
+        hlayout = QHBoxLayout(container)
 
         # 1. Pasta Grafik (Pie Chart)
         stats = SessionRepository.get_focus_quality_stats()
@@ -342,23 +391,19 @@ class StatsWindow(QDialog):
         # Eğer hiç veri yoksa boş gösterme
         if sum(sizes) > 0:
             fig = self._create_figure()
-            canvas = FigureCanvas(fig)
             ax = fig.add_subplot(111)
 
             # Renkler: Yeşil (Deep), Sarı (Moderate), Kırmızı (Distracted)
             colors = ["#175611", "#7e5f1c", "#821628"]
 
-            wedges, texts, autotexts = ax.pie(sizes, labels=labels, autopct='%1.1f%%', 
-                                            startangle=90, colors=colors,
-                                            textprops=dict(color="#C3CDEF"))
+            ax.pie(sizes, labels=labels, autopct='%1.1f%%', 
+                   startangle=90, colors=colors,
+                   textprops=dict(color="#C3CDEF"))
 
             ax.set_title("Odaklanma Kalitesi", color='#cdd6f4', fontsize=12)
-
-            # Pasta grafik arka planı şeffaf olsun
             fig.patch.set_facecolor('#1e1e2e')
-
             fig.tight_layout()
-            layout.addWidget(canvas, stretch=2) # Grafik 2 birim yer kaplasın
+            hlayout.addWidget(FigureCanvas(fig), stretch=2)
 
             # 2. Sözel Analiz (Insight)
             insight_text = self._generate_insight(stats)
@@ -373,9 +418,11 @@ class StatsWindow(QDialog):
                 line-height: 1.5;
             """)
             lbl_insight.setAlignment(Qt.AlignTop)
-            layout.addWidget(lbl_insight, stretch=1) # Yazı 1 birim yer kaplasın
+            hlayout.addWidget(lbl_insight, stretch=1)
+        else:
+            hlayout.addWidget(QLabel("Analiz için yeterli veri yok."))
 
-        self.layout.addWidget(container)
+        layout.addWidget(container)
 
     def _generate_insight(self, stats):
         """Verilere bakarak kullanıcıya özel bir özet metni çıkarır."""
@@ -406,3 +453,17 @@ class StatsWindow(QDialog):
             text += f"• <b>{distracted}</b> oturum (%{int(distracted_ratio)}) yüksek kesinti yaşadı (3+ kez). Bu zaman aralıklarını incelemelisin."
 
         return text
+
+    # =========================================================================
+    # CLEANUP
+    # =========================================================================
+
+    def closeEvent(self, event):
+        """Pencere kapanırken tüm matplotlib figürlerini temizle."""
+        for fig in self._active_figures:
+            try:
+                plt.close(fig)
+            except Exception:
+                pass
+        self._active_figures.clear()
+        event.accept()
