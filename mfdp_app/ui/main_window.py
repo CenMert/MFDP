@@ -6,6 +6,7 @@ from mfdp_app.core.notifier import Notifier
 from mfdp_app.core.timer import PmdrCountdownTimer, CountUpTimer
 from mfdp_app.core.dnd_manager import DNDManager
 from mfdp_app.core.task_manager import TaskManager
+from mfdp_app.core.atomic_analyzer import AtomicAnalyzer
 from mfdp_app.ui.settings_dialog import SettingsDialog
 from mfdp_app.ui.stats_window import StatsWindow
 from mfdp_app.ui.task_window import TaskWindow
@@ -18,18 +19,19 @@ class MainWindow(QMainWindow):
         self.notifier = Notifier()
         self.dnd_manager = DNDManager()
         self.task_manager = TaskManager()
+        self.atomic_analyzer = AtomicAnalyzer()
         self.setWindowTitle("MFDP - Focus")
         self.resize(450, 420)
-        
+
         # Dialog instance'larını sakla (non-modal için)
         self.recursive_task_window = None
         self.task_window = None
         self.stats_window = None
-        
+
         # Timer modu ve instance'ları
         self.timer_mode = "countdown"  # "countdown" veya "countup"
-        self.timer_logic_countdown = PmdrCountdownTimer(self.task_manager)
-        self.timer_logic_countup = CountUpTimer(self.task_manager)
+        self.timer_logic_countdown = PmdrCountdownTimer(self.task_manager, self.atomic_analyzer)
+        self.timer_logic_countup = CountUpTimer(self.task_manager, self.atomic_analyzer)
         
         # Aktif timer (başlangıçta countdown)
         self.timer_logic = self.timer_logic_countdown
@@ -438,16 +440,15 @@ class MainWindow(QMainWindow):
     
     def open_tasks(self):
         """Task yönetim penceresini aç."""
-        if self.task_window is None or not self.task_window.isVisible():
-            if self.task_window is not None:
+        if not self._window_alive(self.task_window) or not self.task_window.isVisible():
+            if self._window_alive(self.task_window):
                 self.task_window.deleteLater()
             self.task_window = TaskWindow(self.task_manager, self)
             self.task_window.setAttribute(Qt.WA_DeleteOnClose)
             self.task_window.task_selected_signal.connect(self.on_task_selected_from_dialog)
-            self.task_window.setModal(False)  # Non-modal yap
+            self.task_window.setModal(False)
             self.task_window.show()
         else:
-            # Zaten açıksa öne getir
             self.task_window.raise_()
             self.task_window.activateWindow()
     
@@ -463,28 +464,36 @@ class MainWindow(QMainWindow):
             if not self.timer_logic.is_running:
                 self.timer_logic.reset()
 
+    def _window_alive(self, win):
+        """Qt C++ nesnesi silinmişse False döner."""
+        if win is None:
+            return False
+        try:
+            win.isVisible()
+            return True
+        except RuntimeError:
+            return False
+
     def open_stats(self):
         """İstatistik penceresini aç."""
-        if self.stats_window is None or not self.stats_window.isVisible():
-            if self.stats_window is not None:
+        if not self._window_alive(self.stats_window) or not self.stats_window.isVisible():
+            if self._window_alive(self.stats_window):
                 self.stats_window.deleteLater()
             self.stats_window = StatsWindow(self)
             self.stats_window.show()
         else:
-            # Zaten açıksa öne getir
             self.stats_window.raise_()
             self.stats_window.activateWindow()
-    
+
     def open_recursive_tasks(self):
         """Özyinelemeli görev yönetim penceresini aç."""
-        if self.recursive_task_window is None or not self.recursive_task_window.isVisible():
-            if self.recursive_task_window is not None:
+        if not self._window_alive(self.recursive_task_window) or not self.recursive_task_window.isVisible():
+            if self._window_alive(self.recursive_task_window):
                 self.recursive_task_window.deleteLater()
             self.recursive_task_window = RecursiveTaskWindow(self)
             self.recursive_task_window.setAttribute(Qt.WA_DeleteOnClose)
             self.recursive_task_window.show()
         else:
-            # Zaten açıksa öne getir
             self.recursive_task_window.raise_()
             self.recursive_task_window.activateWindow()
 

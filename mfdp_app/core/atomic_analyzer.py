@@ -22,6 +22,7 @@ from typing import Optional, Dict, List, Any
 from enum import Enum
 from dataclasses import dataclass, asdict
 import json
+from mfdp_app.db.atomic_event_repository import AtomicEventRepository
 
 
 class EventType(Enum):
@@ -119,14 +120,8 @@ class AtomicAnalyzer:
     # Buffer size before auto-flush (how many events to accumulate)
     AUTO_FLUSH_THRESHOLD = 50
     
-    def __init__(self, db_manager):
-        """
-        Initialize the AtomicAnalyzer.
-        
-        Args:
-            db_manager: DatabaseManager instance for persisting events
-        """
-        self.db_manager = db_manager
+    def __init__(self):
+        """Initialize the AtomicAnalyzer."""
         
         # Current session context
         self.current_session_id: Optional[int] = None
@@ -146,18 +141,12 @@ class AtomicAnalyzer:
     # SESSION LIFECYCLE METHODS
     # ============================================================================
     
-    def start_session(self, session_id: int, planned_duration: int, 
-                     session_type: str = "pomodoro", app_before: str = None) -> None:
+    def start_session(self, planned_duration: int,
+                     session_type: str = "pomodoro", app_before: str = None,
+                     session_id: Optional[int] = None) -> None:
         """
         Mark the start of a new focus session.
-        
-        This should be called when a Pomodoro/Flowtime session begins.
-        
-        Args:
-            session_id: Unique identifier for this session (from sessions_v2 table)
-            planned_duration: Intended session length in seconds
-            session_type: Type of session ("pomodoro", "flowtime", "custom", etc.)
-            app_before: The app that was active before session start (optional)
+        session_id may be None initially; it is assigned retroactively in flush_events().
         """
         self.current_session_id = session_id
         self.session_start_time = datetime.now()
@@ -478,36 +467,30 @@ class AtomicAnalyzer:
     # DATA PERSISTENCE
     # ============================================================================
     
-    def flush_events(self) -> bool:
+    def flush_events(self, session_id: Optional[int] = None) -> bool:
         """
-        Flush all buffered events to the database.
-        
-        This should be called:
-        - Explicitly at session end (complete_session/abandon_session)
-        - Periodically during long sessions (via auto-flush threshold)
-        - When the application is closing
-        
-        Returns:
-            True if flush was successful, False otherwise
+        Flush buffered events to the database.
+        session_id: retroactively assign the real DB session_id to all buffered events.
         """
         if not self.event_buffer:
             return True
-        
-        try:
-            # Convert events to dictionaries for database storage
-            events_data = [event.to_dict() for event in self.event_buffer]
-            
-            # Batch insert all events
-            self.db_manager.insert_atomic_events(events_data)
-            
-            # Clear buffer after successful insert
+
+        if session_id is not None:
+            self.current_session_id = session_id
+            for event in self.event_buffer:
+                event.session_id = session_id
+
+        if not self.current_session_id:
             self.event_buffer = []
-            
+            return False
+
+        try:
+            events_data = [event.to_dict() for event in self.event_buffer]
+            AtomicEventRepository.insert_events(events_data)
+            self.event_buffer = []
             return True
-            
         except Exception as e:
             print(f"Error flushing events: {e}")
-            # Keep events in buffer for retry on next flush
             return False
 
     # ============================================================================

@@ -3,7 +3,8 @@ from dataclasses import dataclass, field
 from typing import Optional, List
 from PySide6.QtCore import QTimer, QObject, Signal
 from mfdp_app.db.session_repository import SessionRepository
-from mfdp_app.db.settings_repository import SettingsRepository 
+from mfdp_app.db.settings_repository import SettingsRepository
+from mfdp_app.core.atomic_analyzer import AtomicAnalyzer, InterruptionSeverity
 
 
 """
@@ -132,31 +133,34 @@ class PmdrCountdownTimer(QObject):
     state_changed_signal = Signal(str)
     task_changed_signal = Signal(int)  # task_id, -1 if None
     
-    def __init__(self, task_manager=None):
+    def __init__(self, task_manager=None, atomic_analyzer: Optional[AtomicAnalyzer] = None):
         super().__init__()
         self.timer = QTimer()
         self.timer.timeout.connect(self._update_timer)
-        
+
         # State
         self.current_state = "Focus"
         self.is_running = False
-        
+
         # Ayarlar
         self.durations = {"Focus": 25, "Short Break": 5, "Long Break": 15}
         self.reload_settings()
-        
+
         # Session yönetimi
         self.current_session: Optional[FocusSession] = None
-        
+
         # Timer countdown
         self.current_time = 0
-        
+
         # Task desteği
         self.task_manager = task_manager
         self.current_task_id = None
-        
+
+        self.atomic_analyzer = atomic_analyzer
+        self._milestones_fired: set = set()
+
         self._set_time_based_on_state()
-    
+
     def start_stop(self):
         """Başlat/Duraklat"""
         if self.is_running:
@@ -166,18 +170,25 @@ class PmdrCountdownTimer(QObject):
             if self.current_session:
                 self.current_session.mark_interruption()
                 self.current_session.pause()
+            if self.atomic_analyzer:
+                self.atomic_analyzer.record_interruption(
+                    reason="user_pause",
+                    severity=InterruptionSeverity.LOW
+                )
         else:
             # DEVAM ET veya BAŞLAT
             if self.current_session:
                 # Devam et
                 self.current_session.resume()
+                if self.atomic_analyzer:
+                    self.atomic_analyzer.resume_session()
             else:
                 # Yeni session başlat
                 self._start_new_session()
-            
+
             self.timer.start(1000)
             self.is_running = True
-        
+
         return self.is_running
     
     def reset(self):
@@ -185,41 +196,33 @@ class PmdrCountdownTimer(QObject):
         Sıfırla - Mevcut session'ı kaydet (eğer çalışma süresi varsa)
         Reset = Kesinti olarak kaydet ama o zamana kadarki süreyi de kaydet
         """
-        # Eğer aktif session varsa ve çalışma süresi varsa, kaydet
         if self.current_session and self.current_session.active_seconds > 0:
             if not self.current_session.is_paused:
-                # Reset'i kesinti olarak işaretle
                 self.current_session.mark_interruption("reset")
-            # Ama o zamana kadarki süreyi çalışılmış olarak kaydet (completed=0, kesinti)
+            if self.atomic_analyzer:
+                self.atomic_analyzer.abandon_session(reason="reset")
             self._save_current_session(completed=0)
-        
-        # Timer'ı durdur
+
         self.timer.stop()
         self.is_running = False
-        
-        # Session'ı temizle
         self.current_session = None
-        
-        # Timer'ı sıfırla
+        self._milestones_fired.clear()
         self._set_time_based_on_state()
         self._emit_time()
-    
+
     def set_mode(self, mode):
         """Mod değiştir - Mevcut session'ı kaydet"""
-        # Eğer timer çalışıyorsa ve session varsa, önce kaydet
         if self.is_running and self.current_session:
             self.current_session.mark_interruption("mode_change")
+            if self.atomic_analyzer:
+                self.atomic_analyzer.abandon_session(reason="mode_change")
             self._save_current_session(completed=0)
-        
-        # Timer'ı durdur
+
         self.timer.stop()
         self.is_running = False
-        
-        # Yeni mod
         self.current_state = mode
         self.current_session = None
-        
-        # Timer'ı yeni moda göre ayarla
+        self._milestones_fired.clear()
         self._set_time_based_on_state()
         self.state_changed_signal.emit(mode)
         self._emit_time()
@@ -263,13 +266,21 @@ class PmdrCountdownTimer(QObject):
             planned_minutes=self.durations.get(self.current_state, 25),
             current_task_id=self.current_task_id
         )
-        
-        # Task bilgilerini ekle
+
         if self.task_manager and self.current_task_id:
             task_name, category = self.task_manager.get_task_name_and_tag()
             self.current_session.current_task_name = task_name
             self.current_session.category = category
-    
+
+        self._milestones_fired.clear()
+
+        if self.atomic_analyzer:
+            planned_secs = self.durations.get(self.current_state, 25) * 60
+            self.atomic_analyzer.start_session(
+                planned_duration=planned_secs,
+                session_type=self.current_state
+            )
+
     def _set_time_based_on_state(self):
         """Mevcut moda göre timer süresini ayarla"""
         minutes = self.durations.get(self.current_state, 25)
@@ -277,25 +288,40 @@ class PmdrCountdownTimer(QObject):
     
     def _update_timer(self):
         """Her saniye çağrılır"""
-        # Timer countdown
         self.current_time -= 1
-        
-        # Session tick (sadece sayıcı artırma)
+
         if self.current_session:
             self.current_session.tick(self.is_running)
-        
+
+        # Milestone kontrolü (sadece Focus modunda)
+        if self.atomic_analyzer and self.current_session and self.current_state == "Focus":
+            planned_secs = self.durations.get("Focus", 25) * 60
+            if planned_secs > 0:
+                elapsed = self.current_session.active_seconds
+                pct = elapsed / planned_secs
+                for threshold, label in ((0.25, "quarter"), (0.5, "halfway"), (0.75, "three_quarters")):
+                    if pct >= threshold and threshold not in self._milestones_fired:
+                        self._milestones_fired.add(threshold)
+                        self.atomic_analyzer.record_milestone(
+                            milestone_type=label,
+                            percentage=int(threshold * 100)
+                        )
+
         self._emit_time()
-        
-        # Timer bitişi
+
         if self.current_time <= 0:
             self.timer.stop()
             self.is_running = False
-            
-            # Session'ı tamamlanmış olarak kaydet
+
             if self.current_session:
                 self.current_session.is_completed = True
+                if self.atomic_analyzer:
+                    self.atomic_analyzer.complete_session(
+                        actual_duration=self.current_session.active_seconds,
+                        completed_by="timer"
+                    )
                 self._save_current_session(completed=1)
-            
+
             self.finished_signal.emit(self.current_state)
     
     def _save_current_session(self, completed):
@@ -303,18 +329,13 @@ class PmdrCountdownTimer(QObject):
         if not self.current_session:
             print("UYARI: Session yok, kayıt yapılmıyor")
             return
-        
+
         end_time = datetime.datetime.now()
-        
-        # Task bilgilerini al
         task_name = self.current_session.current_task_name
         category = self.current_session.category
-        
-        # Session verisini hazırla
         session_dict = self.current_session.to_db_dict(end_time, task_name, category)
-        
-        # DB'ye kaydet (mevcut fonksiyonu kullan)
-        SessionRepository.log_session(
+
+        session_id = SessionRepository.log_session(
             start_time=session_dict['start_time'],
             end_time=session_dict['end_time'],
             duration_seconds=session_dict['duration_seconds'],
@@ -325,17 +346,12 @@ class PmdrCountdownTimer(QObject):
             category=session_dict['category'],
             interruption_count=session_dict['interruption_count']
         )
-        
-        # TODO: Interruptions tablosuna kaydet (şimdilik sadece log)
-        interruptions = self.current_session.get_interruptions_for_db()
-        if interruptions:
-            print(f"📊 {len(interruptions)} kesinti kaydedilecek (interruptions tablosu henüz hazır değil)")
-            for inter in interruptions:
-                print(f"  - {inter['interruption_type']} @ {inter['seconds_into_session']}s")
-        
-        # Session'ı temizle
+
+        if self.atomic_analyzer:
+            self.atomic_analyzer.flush_events(session_id=session_id)
+
         self.current_session = None
-    
+
     def _emit_time(self):
         """Zamanı UI'ya gönder"""
         if self.current_time < 0:
@@ -344,12 +360,13 @@ class PmdrCountdownTimer(QObject):
         seconds = self.current_time % 60
         time_str = f"{minutes:02}:{seconds:02}"
         self.timeout_signal.emit(time_str)
-    
-    # Uygulama kapanışı için hazırlık (main.py'de kullanılacak)
+
     def save_on_exit(self):
         """Uygulama kapanırken aktif session'ı kaydet"""
         if self.current_session and self.current_session.active_seconds > 0:
             self.current_session.mark_interruption("app_exit")
+            if self.atomic_analyzer:
+                self.atomic_analyzer.abandon_session(reason="app_exit")
             self._save_current_session(completed=0)
 
 
@@ -364,87 +381,75 @@ class CountUpTimer(QObject):
     state_changed_signal = Signal(str)  # Durum değişikliği için (opsiyonel)
     task_changed_signal = Signal(int)  # task_id, -1 if None
     
-    def __init__(self, task_manager=None):
+    def __init__(self, task_manager=None, atomic_analyzer: Optional[AtomicAnalyzer] = None):
         super().__init__()
         self.timer = QTimer()
         self.timer.timeout.connect(self._update_timer)
-        
-        # State
+
         self.is_running = False
-        
-        # Session yönetimi
         self.current_session: Optional[FocusSession] = None
-        
-        # Timer count-up (0'dan başlar)
         self.current_time = 0
-        
-        # Task desteği
         self.task_manager = task_manager
         self.current_task_id = None
-    
+        self.atomic_analyzer = atomic_analyzer
+
     def start_stop(self):
         """Başlat/Duraklat"""
         if self.is_running:
-            # DURAKLAT
             self.timer.stop()
             self.is_running = False
             if self.current_session:
                 self.current_session.mark_interruption()
                 self.current_session.pause()
+            if self.atomic_analyzer:
+                self.atomic_analyzer.record_interruption(
+                    reason="user_pause",
+                    severity=InterruptionSeverity.LOW
+                )
         else:
-            # DEVAM ET veya BAŞLAT
             if self.current_session:
-                # Devam et
                 self.current_session.resume()
+                if self.atomic_analyzer:
+                    self.atomic_analyzer.resume_session()
             else:
-                # Yeni session başlat
                 self._start_new_session()
-            
+
             self.timer.start(1000)
             self.is_running = True
-        
+
         return self.is_running
     
     def reset(self):
-        """
-        Sıfırla - Mevcut session'ı kaydet (eğer çalışma süresi varsa)
-        """
-        # Eğer aktif session varsa ve çalışma süresi varsa, kaydet
+        """Sıfırla - Mevcut session'ı kaydet (eğer çalışma süresi varsa)"""
         if self.current_session and self.current_session.active_seconds > 0:
             if not self.current_session.is_paused:
-                # Reset'i kesinti olarak işaretle
                 self.current_session.mark_interruption("reset")
-            # Ama o zamana kadarki süreyi çalışılmış olarak kaydet (completed=0, kesinti)
+            if self.atomic_analyzer:
+                self.atomic_analyzer.abandon_session(reason="reset")
             self._save_current_session(completed=0)
-        
-        # Timer'ı durdur
+
         self.timer.stop()
         self.is_running = False
-        
-        # Session'ı temizle
         self.current_session = None
-        
-        # Timer'ı sıfırla
         self.current_time = 0
         self._emit_time()
-    
+
     def complete(self):
-        """
-        Tamamla - Timer'ı durdur ve session'ı tamamlanmış olarak kaydet
-        """
-        # Timer'ı durdur
+        """Tamamla - Timer'ı durdur ve session'ı tamamlanmış olarak kaydet"""
         self.timer.stop()
         self.is_running = False
-        
-        # Session'ı tamamlanmış olarak kaydet
+
         if self.current_session:
             self.current_session.is_completed = True
+            if self.atomic_analyzer:
+                self.atomic_analyzer.complete_session(
+                    actual_duration=self.current_time,
+                    completed_by="user"
+                )
             self._save_current_session(completed=1)
-        
-        # Timer'ı sıfırla
+
         self.current_time = 0
         self._emit_time()
-        
         self.finished_signal.emit("Free Timer")
     
     def set_task(self, task_id):
@@ -468,25 +473,28 @@ class CountUpTimer(QObject):
         self.current_session = FocusSession(
             start_time=datetime.datetime.now(),
             mode="Free Timer",
-            planned_minutes=0,  # Count-up'da planlanan süre yok
+            planned_minutes=0,
             current_task_id=self.current_task_id
         )
-        
-        # Task bilgilerini ekle
+
         if self.task_manager and self.current_task_id:
             task_name, category = self.task_manager.get_task_name_and_tag()
             self.current_session.current_task_name = task_name
             self.current_session.category = category
-    
+
+        if self.atomic_analyzer:
+            self.atomic_analyzer.start_session(
+                planned_duration=0,
+                session_type="Free Timer"
+            )
+
     def _update_timer(self):
         """Her saniye çağrılır"""
-        # Timer count-up
         self.current_time += 1
-        
-        # Session tick (sadece sayıcı artırma)
+
         if self.current_session:
             self.current_session.tick(self.is_running)
-        
+
         self._emit_time()
     
     def _save_current_session(self, completed):
@@ -494,44 +502,42 @@ class CountUpTimer(QObject):
         if not self.current_session:
             print("UYARI: Session yok, kayıt yapılmıyor")
             return
-        
+
         end_time = datetime.datetime.now()
-        
-        # Task bilgilerini al
         task_name = self.current_session.current_task_name
         category = self.current_session.category
-        
-        # Session verisini hazırla
         session_dict = self.current_session.to_db_dict(end_time, task_name, category)
-        
-        # DB'ye kaydet (planned_min=None olarak gönder)
-        SessionRepository.log_session(
+
+        session_id = SessionRepository.log_session(
             start_time=session_dict['start_time'],
             end_time=session_dict['end_time'],
             duration_seconds=session_dict['duration_seconds'],
-            planned_duration_minutes=None,  # Count-up'da planlanan süre yok
+            planned_duration_minutes=None,
             mode="Free Timer",
             completed=completed,
             task_name=session_dict['task_name'],
             category=session_dict['category'],
             interruption_count=session_dict['interruption_count']
         )
-        
-        # Session'ı temizle
+
+        if self.atomic_analyzer:
+            self.atomic_analyzer.flush_events(session_id=session_id)
+
         self.current_session = None
-    
+
     def _emit_time(self):
         """Zamanı UI'ya gönder"""
         minutes = self.current_time // 60
         seconds = self.current_time % 60
         time_str = f"{minutes:02}:{seconds:02}"
         self.timeout_signal.emit(time_str)
-    
-    # Uygulama kapanışı için hazırlık
+
     def save_on_exit(self):
         """Uygulama kapanırken aktif session'ı kaydet"""
         if self.current_session and self.current_session.active_seconds > 0:
             self.current_session.mark_interruption("app_exit")
+            if self.atomic_analyzer:
+                self.atomic_analyzer.abandon_session(reason="app_exit")
             self._save_current_session(completed=0)
 
 
