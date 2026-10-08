@@ -120,6 +120,22 @@ bash run.sh
 
 ---
 
+## Updating
+
+Open **Ayarlar → Güncellemeleri Kontrol Et**. The app checks the latest
+[GitHub release](https://github.com/CenMert/MFDP/releases); if a newer one exists it can
+update itself (requires a `git clone` install with no local changes, and `git` on PATH),
+reinstalls dependencies when `requirements.txt` changed, and offers to restart.
+Your database (`*.db`) is never touched. Otherwise it opens the release page instead.
+
+### Publishing a release (maintainer)
+
+1. Bump `__version__` in `mfdp_app/version.py` (e.g. `1.1.0`) and commit.
+2. `git tag v1.1.0 && git push origin main --tags`
+3. Create a GitHub Release from that tag.
+
+---
+
 ## Project Structure
 
 ```
