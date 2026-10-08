@@ -6,6 +6,7 @@ import threading
 from mfdp_app.ui.styles import MODERN_DARK_THEME
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import qInstallMessageHandler
+from PySide6.QtGui import QIcon
 from mfdp_app.ui.main_window import MainWindow
 from mfdp_app.db.database_initializer import DatabaseInitializer
 from mfdp_app.db.base_repository import BaseRepository
@@ -38,6 +39,9 @@ def main():
     print("[DEBUG] db ready", flush=True)
 
     app = QApplication(sys.argv)
+    app.setApplicationName("mfdp")
+    app.setDesktopFileName("mfdp")
+    app.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "resources", "icons", "mfdp.svg")))
     app.setStyleSheet(MODERN_DARK_THEME)
 
     print("[DEBUG] creating MainWindow", flush=True)
