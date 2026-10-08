@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=MFDP
+GenericName=Focus Timer
+Comment=Pomodoro & focus tracker
+Exec=/home/kaz/Projects/MFDP_base/run.sh
+Path=/home/kaz/Projects/MFDP_base
+Icon=/home/kaz/Projects/MFDP_base/mfdp_app/resources/icons/mfdp.svg
+Terminal=false
+Categories=Utility;
+Keywords=pomodoro;focus;timer;mfdp;
+StartupWMClass=mfdp

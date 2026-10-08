@@ -58,6 +58,7 @@ class TaskWindow(QDialog):
             }
         """)
         self.task_tree.itemClicked.connect(self.on_task_selected)
+        self.task_tree.itemDoubleClicked.connect(self.on_task_double_clicked)
         list_layout.addWidget(self.task_tree)
         
         # Aktif task butonu
@@ -292,6 +293,14 @@ class TaskWindow(QDialog):
             self.clear_form()
             self.refresh_task_list()
     
+    def on_task_double_clicked(self, item, column):
+        """Çift tıklanan task'ı otomatik olarak aktif yap."""
+        if item.data(0, Qt.UserRole) is None:
+            return  # Tag item'ı
+        self.task_tree.setCurrentItem(item)
+        self.on_task_selected(item, column)
+        self.set_active_task()
+
     def set_active_task(self):
         """Seçili task'ı aktif yap."""
         selected_items = self.task_tree.selectedItems()

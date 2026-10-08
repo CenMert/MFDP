@@ -20,3 +20,8 @@ env/
 
 # İşletim Sistemi Dosyaları
 .DS_Store
+
+MyDataBases/
+*.log
+*.bak
+*.tmp

@@ -1,11 +1,8 @@
 from PySide6.QtCore import QObject, Signal
 from typing import Optional, List, Tuple
 from mfdp_app.models.data_models import Task
-from mfdp_app.db_manager import (
-    insert_task, update_task, delete_task, get_task_by_id,
-    get_all_tasks, get_tasks_by_tag, get_all_tags,
-    assign_color_to_tag, get_tag_time_summary, get_task_time_summary
-)
+from mfdp_app.db.task_repository import TaskRepository
+from mfdp_app.db.tag_repository import TagRepository
 
 class TaskManager(QObject):
     """Task ve tag yönetimi için core sınıf."""
@@ -27,16 +24,16 @@ class TaskManager(QObject):
         """Yeni task oluştur."""
         # Eğer renk verilmemişse, tag için otomatik renk ata
         if color is None:
-            existing_tags = get_all_tags()
+            existing_tags = TagRepository.get_all_tags()
             tag_colors = {t['name']: t['color'] for t in existing_tags if t['color']}
             if tag in tag_colors:
                 color = tag_colors[tag]
             else:
                 # Yeni tag için otomatik renk ata
                 color = self._get_next_color()
-                assign_color_to_tag(tag, color)
+                TagRepository.assign_color_to_tag(tag, color)
         
-        task_id = insert_task(name, tag, planned_duration_minutes, color)
+        task_id = TaskRepository.insert_task(name, tag, planned_duration_minutes, color)
         if task_id:
             self.task_created_signal.emit(task_id)
         return task_id
@@ -44,14 +41,14 @@ class TaskManager(QObject):
     def update_task(self, task_id: int, name: Optional[str] = None, tag: Optional[str] = None,
                    planned_duration_minutes: Optional[int] = None, color: Optional[str] = None) -> bool:
         """Task güncelle."""
-        success = update_task(task_id, name, tag, planned_duration_minutes, color)
+        success = TaskRepository.update_task(task_id, name, tag, planned_duration_minutes, color)
         if success:
             self.task_updated_signal.emit(task_id)
         return success
     
     def delete_task(self, task_id: int) -> bool:
         """Task'ı sil (soft delete)."""
-        success = delete_task(task_id)
+        success = TaskRepository.delete_task(task_id)
         if success:
             # Eğer aktif task silindiyse, aktif task'ı temizle
             if self._active_task_id == task_id:
@@ -60,15 +57,15 @@ class TaskManager(QObject):
     
     def get_all_tasks(self, include_inactive: bool = False) -> List[Task]:
         """Tüm taskları getir."""
-        return get_all_tasks(include_inactive)
+        return TaskRepository.get_all_tasks(include_inactive)
     
     def get_tasks_by_tag(self, tag: str) -> List[Task]:
         """Tag'a göre taskları getir."""
-        return get_tasks_by_tag(tag)
+        return TaskRepository.get_tasks_by_tag(tag)
     
     def get_task_by_id(self, task_id: int) -> Optional[Task]:
         """ID'ye göre task getir."""
-        return get_task_by_id(task_id)
+        return TaskRepository.get_task_by_id(task_id)
     
     def set_active_task(self, task_id: Optional[int]):
         """Aktif task ayarla."""
@@ -77,7 +74,7 @@ class TaskManager(QObject):
             return
         
         if task_id is not None:
-            task = get_task_by_id(task_id)
+            task = TaskRepository.get_task_by_id(task_id)
             if not task or not task.is_active:
                 return
         
@@ -88,7 +85,7 @@ class TaskManager(QObject):
         """Aktif task'ı getir."""
         if self._active_task_id is None:
             return None
-        return get_task_by_id(self._active_task_id)
+        return TaskRepository.get_task_by_id(self._active_task_id)
     
     def get_active_task_id(self) -> Optional[int]:
         """Aktif task ID'sini getir."""
@@ -96,19 +93,19 @@ class TaskManager(QObject):
     
     def get_all_tags(self) -> List[dict]:
         """Tüm tagları getir."""
-        return get_all_tags()
+        return TagRepository.get_all_tags()
     
     def assign_color_to_tag(self, tag: str, color: str) -> bool:
         """Tag'a renk ata."""
-        return assign_color_to_tag(tag, color)
+        return TagRepository.assign_color_to_tag(tag, color)
     
     def get_tag_time_summary(self, tag: str, days: Optional[int] = None) -> float:
         """Tag için toplam süre (dakika)."""
-        return get_tag_time_summary(tag, days)
+        return TagRepository.get_tag_time_summary(tag, days)
     
     def get_task_time_summary(self, task_id: int, days: Optional[int] = None) -> float:
         """Task için toplam süre (dakika)."""
-        return get_task_time_summary(task_id, days)
+        return TaskRepository.get_task_time_summary(task_id, days)
     
     def get_task_name_and_tag(self) -> Tuple[Optional[str], Optional[str]]:
         """Aktif task'ın adını ve tag'ini döndür."""

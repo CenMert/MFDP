@@ -8,17 +8,31 @@ from PySide6.QtMultimedia import QSoundEffect
 class Notifier(QObject):
     def __init__(self):
         super().__init__()
-        
+
         self.base_path = os.path.join(os.getcwd(), 'mfdp_app', 'resources', 'sounds')
-        
-        self.alarm_sound = self._load_sound('alarm.wav') 
+
+        # Load saved volume before creating sounds (default 100%)
+        from mfdp_app.db.settings_repository import SettingsRepository
+        saved = SettingsRepository.get_setting('sound_volume', '100')
+        self._volume = float(saved) / 100.0
+
+        self.alarm_sound = self._load_sound('alarm.wav')
         self.chime_sound = self._load_sound('chime.wav')
         self.gong_sound = self._load_sound('gong.wav')
 
+        # Ill add pen drop and writing sound for the start and stop.
+        self.write_pen_sound = self._load_sound('write_pen_sound.wav')
+        self.clo_pen_sound = self._load_sound('close_pen_sound.wav')
+
+        self._all_sounds = [
+            self.alarm_sound, self.chime_sound, self.gong_sound,
+            self.write_pen_sound, self.clo_pen_sound,
+        ]
+
         self.last_triggered_minute = -1
-        
+
         # YENİ: Varsayılan olarak açık
-        self.chime_enabled = True 
+        self.chime_enabled = True
 
         self.chime_timer = QTimer()
         self.chime_timer.timeout.connect(self._check_hourly_chime)
@@ -29,8 +43,14 @@ class Notifier(QObject):
         effect = QSoundEffect()
         if os.path.exists(full_path):
             effect.setSource(QUrl.fromLocalFile(full_path))
-            effect.setVolume(1.0)
+            effect.setVolume(self._volume)
         return effect
+
+    def set_volume(self, volume: float):
+        """Set global volume for all sounds. volume should be 0.0–1.0."""
+        self._volume = max(0.0, min(1.0, volume))
+        for sound in self._all_sounds:
+            sound.setVolume(self._volume)
 
     def set_chime_enabled(self, enabled):
         """Arayüzden gelen On/Off komutunu işler."""
@@ -44,6 +64,21 @@ class Notifier(QObject):
             self.alarm_sound.play()
         else:
             print('\a') 
+
+    def _play_effect(self, effect: QSoundEffect):
+        """QSoundEffect'i güvenli şekilde tekrar tetikleyerek çal."""
+        if effect.source().isValid():
+            # Aynı sesi art arda tetiklemek için önce durdur, sonra başlat.
+            effect.stop()
+            effect.play()
+
+    def play_start_counter_sound(self):
+        """Sayaç başlat/devam et sesi."""
+        self._play_effect(self.write_pen_sound)
+
+    def play_pause_counter_sound(self):
+        """Sayaç duraklat sesi."""
+        self._play_effect(self.clo_pen_sound)
 
     def play_gong(self):
         print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] ===GONG!===")

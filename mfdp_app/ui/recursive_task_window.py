@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QColor, QKeyEvent
 from mfdp_app.core.recursive_task_manager import RecursiveTaskManager
 from mfdp_app.models.data_models import Task
-from mfdp_app.db_manager import get_all_tags
+from mfdp_app.db.tag_repository import TagRepository
 
 
 class RecursiveTaskWindow(QDialog):
@@ -328,7 +328,7 @@ class RecursiveTaskWindow(QDialog):
     def _refresh_tag_combo(self):
         """Tag combo box'ı güncelle."""
         self.combo_tag.clear()
-        tags = get_all_tags()
+        tags = TagRepository.get_all_tags()
         for tag in tags:
             self.combo_tag.addItem(tag['name'])
         if not tags:
