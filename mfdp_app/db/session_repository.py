@@ -113,6 +113,32 @@ class SessionRepository(BaseRepository):
         return []
     
     @staticmethod
+    def get_sessions_between(start: datetime.datetime, end: datetime.datetime) -> List[Dict]:
+        """
+        Get sessions whose start_time falls in [start, end), oldest first.
+        
+        Args:
+            start: Range start (inclusive)
+            end: Range end (exclusive)
+        
+        Returns:
+            List of session dictionaries
+        """
+        rows = BaseRepository.execute_query(
+            """
+            SELECT * FROM sessions_v2
+            WHERE start_time >= ? AND start_time < ?
+            ORDER BY start_time ASC, id ASC
+            """,
+            (start.strftime('%Y-%m-%d %H:%M:%S'), end.strftime('%Y-%m-%d %H:%M:%S')),
+            fetch_all=True
+        )
+        
+        if rows:
+            return [dict(row) for row in rows]
+        return []
+    
+    @staticmethod
     def get_daily_trend(days: int = 7) -> List[Tuple[str, int]]:
         """
         Get daily productivity trend for last N days (Focus and Free Timer modes only).

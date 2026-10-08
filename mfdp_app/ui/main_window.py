@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
                                QLabel, QPushButton, QHBoxLayout, QCheckBox)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QCloseEvent
 from mfdp_app.core.notifier import Notifier
 from mfdp_app.core.timer import PmdrCountdownTimer, CountUpTimer
@@ -11,6 +11,9 @@ from mfdp_app.ui.settings_dialog import SettingsDialog
 from mfdp_app.ui.stats_window import StatsWindow
 from mfdp_app.ui.task_window import TaskWindow
 from mfdp_app.ui.recursive_task_window import RecursiveTaskWindow
+from mfdp_app.ui.day_panel import DayPanel
+from mfdp_app.ui.block_detail_dialog import BlockDetailDialog
+from mfdp_app.core.daily_report import build_block_report
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -50,6 +53,11 @@ class MainWindow(QMainWindow):
         self.timer_logic_countup.task_changed_signal.connect(self.on_task_changed)
 
         self.init_ui()
+
+        # Oturum DB'ye yazılınca gün panelini tazele
+        self.timer_logic_countdown.session_saved_signal.connect(self.day_panel.refresh)
+        self.timer_logic_countup.session_saved_signal.connect(self.day_panel.refresh)
+
         self.timer_logic_countdown.reset()
 
         # Timer durumlarını dinleyerek DND'yi yönetmeliyiz (sadece countdown için)
@@ -161,6 +169,12 @@ class MainWindow(QMainWindow):
         self.lbl_timer_countup.setAlignment(Qt.AlignCenter)
         self.lbl_timer_countup.setVisible(False)
         main_layout.addWidget(self.lbl_timer_countup)
+
+        # Gün paneli (açılır özet, her iki modda da görünür)
+        self.day_panel = DayPanel()
+        self.day_panel.block_clicked.connect(self.open_block_detail)
+        self.day_panel.expanded_changed.connect(self.on_day_panel_toggled)
+        main_layout.addWidget(self.day_panel)
 
         # Butonlar (countdown için)
         btn_layout = QHBoxLayout()
@@ -458,8 +472,8 @@ class MainWindow(QMainWindow):
         self.timer_logic.set_task(task_id)
     
     def open_settings(self):
-        dialog = SettingsDialog(self)
-        if dialog.exec(): 
+        dialog = SettingsDialog(self, notifier=self.notifier)
+        if dialog.exec():
             self.timer_logic.reload_settings()
             if not self.timer_logic.is_running:
                 self.timer_logic.reset()
@@ -496,6 +510,15 @@ class MainWindow(QMainWindow):
         else:
             self.recursive_task_window.raise_()
             self.recursive_task_window.activateWindow()
+
+    def open_block_detail(self, block, color):
+        """Gün panelinden seçilen bloğun ayrıntılı raporunu aç."""
+        dialog = BlockDetailDialog(build_block_report(block, color), self)
+        dialog.show()
+
+    def on_day_panel_toggled(self, expanded):
+        """Panel açılınca pencere uzasın, kapanınca eski boyuna dönsün."""
+        QTimer.singleShot(0, lambda: self.resize(self.width(), self.sizeHint().height()))
 
     def manual_dnd_toggle(self, checked):
         """Kullanıcı kutucuğa tıkladığında ne olsun?"""

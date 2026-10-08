@@ -75,14 +75,16 @@ class FocusSession:
             self.is_paused = True
             self.pause_start_time = datetime.datetime.now()
     
-    def resume(self):
-        """Duraklatma bitir"""
+    def resume(self) -> Optional[float]:
+        """Duraklatma bitir - biten duraklamanın süresini (sn) döndürür"""
         if self.is_paused and self.pause_start_time:
             pause_duration = (datetime.datetime.now() - self.pause_start_time).total_seconds()
             self.pause_durations.append(pause_duration)
             self.pause_count += 1
             self.is_paused = False
             self.pause_start_time = None
+            return pause_duration
+        return None
     
     def mark_interruption(self, interruption_type: str = "pause"):
         """Kesinti işaretle (reset, mod değişimi vb.)"""
@@ -132,6 +134,7 @@ class PmdrCountdownTimer(QObject):
     finished_signal = Signal(str)
     state_changed_signal = Signal(str)
     task_changed_signal = Signal(int)  # task_id, -1 if None
+    session_saved_signal = Signal(int)  # DB'ye kaydedilen session_id
     
     def __init__(self, task_manager=None, atomic_analyzer: Optional[AtomicAnalyzer] = None):
         super().__init__()
@@ -173,15 +176,19 @@ class PmdrCountdownTimer(QObject):
             if self.atomic_analyzer:
                 self.atomic_analyzer.record_interruption(
                     reason="user_pause",
-                    severity=InterruptionSeverity.LOW
+                    severity=InterruptionSeverity.LOW,
+                    active_seconds=self.current_session.active_seconds if self.current_session else None
                 )
         else:
             # DEVAM ET veya BAŞLAT
             if self.current_session:
                 # Devam et
-                self.current_session.resume()
+                pause_seconds = self.current_session.resume()
                 if self.atomic_analyzer:
-                    self.atomic_analyzer.resume_session()
+                    self.atomic_analyzer.resume_session(
+                        pause_seconds=pause_seconds,
+                        active_seconds=self.current_session.active_seconds
+                    )
             else:
                 # Yeni session başlat
                 self._start_new_session()
@@ -351,6 +358,8 @@ class PmdrCountdownTimer(QObject):
             self.atomic_analyzer.flush_events(session_id=session_id)
 
         self.current_session = None
+        if session_id:
+            self.session_saved_signal.emit(session_id)
 
     def _emit_time(self):
         """Zamanı UI'ya gönder"""
@@ -380,6 +389,7 @@ class CountUpTimer(QObject):
     finished_signal = Signal(str)  # "Free Timer" - tamamlandığında
     state_changed_signal = Signal(str)  # Durum değişikliği için (opsiyonel)
     task_changed_signal = Signal(int)  # task_id, -1 if None
+    session_saved_signal = Signal(int)  # DB'ye kaydedilen session_id
     
     def __init__(self, task_manager=None, atomic_analyzer: Optional[AtomicAnalyzer] = None):
         super().__init__()
@@ -404,13 +414,17 @@ class CountUpTimer(QObject):
             if self.atomic_analyzer:
                 self.atomic_analyzer.record_interruption(
                     reason="user_pause",
-                    severity=InterruptionSeverity.LOW
+                    severity=InterruptionSeverity.LOW,
+                    active_seconds=self.current_session.active_seconds if self.current_session else None
                 )
         else:
             if self.current_session:
-                self.current_session.resume()
+                pause_seconds = self.current_session.resume()
                 if self.atomic_analyzer:
-                    self.atomic_analyzer.resume_session()
+                    self.atomic_analyzer.resume_session(
+                        pause_seconds=pause_seconds,
+                        active_seconds=self.current_session.active_seconds
+                    )
             else:
                 self._start_new_session()
 
@@ -524,6 +538,8 @@ class CountUpTimer(QObject):
             self.atomic_analyzer.flush_events(session_id=session_id)
 
         self.current_session = None
+        if session_id:
+            self.session_saved_signal.emit(session_id)
 
     def _emit_time(self):
         """Zamanı UI'ya gönder"""

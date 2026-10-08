@@ -125,6 +125,8 @@ class AtomicAnalyzer:
         
         # Current session context
         self.current_session_id: Optional[int] = None
+        # session_id DB'ye yazılana kadar None olabilir; aktiflik ayrı tutulur
+        self._session_active: bool = False
         self.session_start_time: Optional[datetime] = None
         self.session_planned_duration: Optional[int] = None  # in seconds
         self.session_type: str = "pomodoro"  # or "flowtime", "custom", etc.
@@ -149,6 +151,7 @@ class AtomicAnalyzer:
         session_id may be None initially; it is assigned retroactively in flush_events().
         """
         self.current_session_id = session_id
+        self._session_active = True
         self.session_start_time = datetime.now()
         self.session_planned_duration = planned_duration
         self.session_type = session_type
@@ -167,21 +170,28 @@ class AtomicAnalyzer:
             }
         )
 
-    def resume_session(self, app_context: str = None) -> None:
+    def resume_session(self, app_context: str = None, pause_seconds: Optional[float] = None,
+                       active_seconds: Optional[int] = None) -> None:
         """
         Mark when a paused session is resumed.
         
         Args:
             app_context: Current app when resuming (optional)
+            pause_seconds: How long the pause that just ended lasted (optional)
+            active_seconds: Net (pause-excluded) seconds worked so far (optional)
         """
-        if not self.current_session_id:
+        if not self._session_active:
             return
         
         elapsed = self._get_elapsed_seconds()
         self._record_event(
             event_type=EventType.SESSION_RESUMED,
             elapsed_seconds=elapsed,
-            metadata={"app_context": app_context}
+            metadata={
+                "app_context": app_context,
+                "pause_seconds": int(pause_seconds) if pause_seconds is not None else None,
+                "active_seconds": active_seconds
+            }
         )
 
     def complete_session(self, actual_duration: int, completed_by: str = "timer") -> None:
@@ -192,7 +202,7 @@ class AtomicAnalyzer:
             actual_duration: How long the session actually ran (seconds)
             completed_by: How session ended ("timer", "user", "cancelled")
         """
-        if not self.current_session_id:
+        if not self._session_active:
             return
         
         elapsed = self._get_elapsed_seconds()
@@ -221,7 +231,7 @@ class AtomicAnalyzer:
         Args:
             reason: Why the session was abandoned
         """
-        if not self.current_session_id:
+        if not self._session_active:
             return
         
         elapsed = self._get_elapsed_seconds()
@@ -244,7 +254,7 @@ class AtomicAnalyzer:
     # ============================================================================
     
     def record_interruption(self, reason: str, severity: InterruptionSeverity,
-                           recovery_app: str = None) -> None:
+                           recovery_app: str = None, active_seconds: Optional[int] = None) -> None:
         """
         Record that the user was interrupted during the session.
         
@@ -255,6 +265,7 @@ class AtomicAnalyzer:
             reason: Why interrupted ("user_pause", "notification", "external_call", etc.)
             severity: How severe was this interruption (LOW/MEDIUM/HIGH)
             recovery_app: What app they switched to (optional)
+            active_seconds: Net (pause-excluded) seconds worked so far (optional)
         
         Example:
             analyzer.record_interruption(
@@ -262,7 +273,7 @@ class AtomicAnalyzer:
                 severity=InterruptionSeverity.MEDIUM
             )
         """
-        if not self.current_session_id:
+        if not self._session_active:
             return
         
         elapsed = self._get_elapsed_seconds()
@@ -281,12 +292,14 @@ class AtomicAnalyzer:
                 "severity": severity.value,
                 "interruption_number": self.interruption_count,
                 "first_interruption_at": self.first_interruption_elapsed,
-                "recovery_app": recovery_app
+                "recovery_app": recovery_app,
+                "active_seconds": active_seconds
             }
         )
         
-        # Auto-flush if buffer is getting large
-        if len(self.event_buffer) >= self.AUTO_FLUSH_THRESHOLD:
+        # Auto-flush if buffer is getting large (only once the DB id is known,
+        # otherwise flush_events would drop the buffer)
+        if self.current_session_id and len(self.event_buffer) >= self.AUTO_FLUSH_THRESHOLD:
             self.flush_events()
 
     def record_focus_shift(self, from_app: str, to_app: str, 
@@ -309,7 +322,7 @@ class AtomicAnalyzer:
                 focus_duration=300
             )
         """
-        if not self.current_session_id:
+        if not self._session_active:
             return
         
         elapsed = self._get_elapsed_seconds()
@@ -344,7 +357,7 @@ class AtomicAnalyzer:
                 severity=InterruptionSeverity.MEDIUM
             )
         """
-        if not self.current_session_id:
+        if not self._session_active:
             return
         
         elapsed = self._get_elapsed_seconds()
@@ -370,7 +383,7 @@ class AtomicAnalyzer:
         Args:
             enabled: True if DND was turned ON, False if turned OFF
         """
-        if not self.current_session_id:
+        if not self._session_active:
             return
         
         elapsed = self._get_elapsed_seconds()
@@ -396,7 +409,7 @@ class AtomicAnalyzer:
                 value="home_office"
             )
         """
-        if not self.current_session_id:
+        if not self._session_active:
             return
         
         elapsed = self._get_elapsed_seconds()
@@ -424,7 +437,7 @@ class AtomicAnalyzer:
             milestone_type: Type of milestone ("quarter", "halfway", "three_quarters", "complete")
             percentage: Percentage of session completed (25, 50, 75, 100)
         """
-        if not self.current_session_id:
+        if not self._session_active:
             return
         
         elapsed = self._get_elapsed_seconds()
@@ -448,7 +461,7 @@ class AtomicAnalyzer:
             duration: How long the break was (seconds, if known)
             action: "started" or "ended"
         """
-        if not self.current_session_id:
+        if not self._session_active:
             return
         
         elapsed = self._get_elapsed_seconds()
@@ -508,7 +521,7 @@ class AtomicAnalyzer:
             List of event dictionaries
         """
         try:
-            return self.db_manager.get_atomic_events(session_id)
+            return AtomicEventRepository.get_events(session_id)
         except Exception as e:
             print(f"Error retrieving session events: {e}")
             return []
@@ -526,7 +539,7 @@ class AtomicAnalyzer:
             List of event dictionaries
         """
         try:
-            return self.db_manager.get_atomic_events_by_range(start_date, end_date)
+            return AtomicEventRepository.get_events_by_range(start_date, end_date)
         except Exception as e:
             print(f"Error retrieving events by range: {e}")
             return []
@@ -649,6 +662,7 @@ class AtomicAnalyzer:
 
     def _reset_session_context(self) -> None:
         """Reset all session-specific state when a session ends."""
+        self._session_active = False
         self.current_session_id = None
         self.session_start_time = None
         self.session_planned_duration = None

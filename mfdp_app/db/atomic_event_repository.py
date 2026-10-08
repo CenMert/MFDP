@@ -103,6 +103,48 @@ class AtomicEventRepository(BaseRepository):
         return events
     
     @staticmethod
+    def get_events_for_sessions(session_ids: List[int]) -> Dict[int, List[Dict]]:
+        """
+        Get atomic events for several sessions in one query.
+        
+        Args:
+            session_ids: Session IDs
+        
+        Returns:
+            Dictionary mapping session_id to its events in chronological order
+        """
+        result: Dict[int, List[Dict]] = {sid: [] for sid in session_ids}
+        if not session_ids:
+            return result
+        
+        placeholders = ",".join(["?"] * len(session_ids))
+        rows = BaseRepository.execute_query(
+            f"""
+            SELECT id, session_id, event_type, elapsed_seconds, timestamp, metadata, created_at
+            FROM atomic_events
+            WHERE session_id IN ({placeholders})
+            ORDER BY session_id ASC, timestamp ASC, id ASC
+            """,
+            tuple(session_ids),
+            fetch_all=True
+        )
+        
+        if rows:
+            for row in rows:
+                metadata = json.loads(row['metadata']) if row['metadata'] else {}
+                result.setdefault(row['session_id'], []).append({
+                    'id': row['id'],
+                    'session_id': row['session_id'],
+                    'event_type': row['event_type'],
+                    'elapsed_seconds': row['elapsed_seconds'],
+                    'timestamp': row['timestamp'],
+                    'metadata': metadata,
+                    'created_at': row['created_at']
+                })
+        
+        return result
+    
+    @staticmethod
     def get_events_by_range(
         start_date: datetime.datetime,
         end_date: datetime.datetime

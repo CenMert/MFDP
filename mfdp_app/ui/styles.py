@@ -101,4 +101,60 @@ QCheckBox#DNDCheckbox::indicator:checked {
     background-color: #f38ba8; /* Pastel Kırmızı (Uyarı rengi) */
     border-color: #f38ba8;
 }
+
+/* Gün Paneli (timer altındaki açılır özet) */
+QFrame#DayPanel {
+    background-color: #181825;
+    border: 1px solid #313244;
+    border-radius: 8px;
+}
+QPushButton#DayPanelHeader {
+    background-color: transparent;
+    border: none;
+    padding: 6px 8px;
+    text-align: left;
+    color: #cdd6f4;
+    font-size: 13px;
+}
+QPushButton#DayPanelHeader:hover {
+    color: #f9e2af;
+}
+QPushButton#DayNavButton {
+    background-color: transparent;
+    border: none;
+    padding: 4px 6px;
+    color: #a6adc8;
+    font-size: 12px;
+}
+QPushButton#DayNavButton:hover {
+    color: #cdd6f4;
+    background-color: #313244;
+}
+QPushButton#DayNavButton:disabled {
+    color: #45475a;
+}
+QScrollArea#DayPanelScroll, QWidget#DayPanelBody {
+    background: transparent;
+    border: none;
+}
+QFrame#DayBlockRow {
+    border-radius: 5px;
+}
+QFrame#DayBlockRow:hover {
+    background-color: #313244;
+}
+QLabel#DayTagLabel {
+    font-size: 11px;
+    font-weight: bold;
+    color: #a6adc8;
+}
+QLabel#DayBlockTime, QLabel#DayEmptyLabel {
+    font-size: 12px;
+    color: #7f849c;
+}
+QLabel#DayBlockDuration {
+    font-size: 12px;
+    font-weight: bold;
+    color: #a6e3a1;
+}
 """
