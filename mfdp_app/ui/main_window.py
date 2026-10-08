@@ -1,15 +1,19 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
                                QLabel, QPushButton, QHBoxLayout, QCheckBox)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QCloseEvent
 from mfdp_app.core.notifier import Notifier
 from mfdp_app.core.timer import PmdrCountdownTimer, CountUpTimer
 from mfdp_app.core.dnd_manager import DNDManager
 from mfdp_app.core.task_manager import TaskManager
+from mfdp_app.core.atomic_analyzer import AtomicAnalyzer
 from mfdp_app.ui.settings_dialog import SettingsDialog
 from mfdp_app.ui.stats_window import StatsWindow
 from mfdp_app.ui.task_window import TaskWindow
 from mfdp_app.ui.recursive_task_window import RecursiveTaskWindow
+from mfdp_app.ui.day_panel import DayPanel
+from mfdp_app.ui.block_detail_dialog import BlockDetailDialog
+from mfdp_app.core.daily_report import build_block_report
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -18,18 +22,19 @@ class MainWindow(QMainWindow):
         self.notifier = Notifier()
         self.dnd_manager = DNDManager()
         self.task_manager = TaskManager()
+        self.atomic_analyzer = AtomicAnalyzer()
         self.setWindowTitle("MFDP - Focus")
         self.resize(450, 420)
-        
+
         # Dialog instance'larını sakla (non-modal için)
         self.recursive_task_window = None
         self.task_window = None
         self.stats_window = None
-        
+
         # Timer modu ve instance'ları
         self.timer_mode = "countdown"  # "countdown" veya "countup"
-        self.timer_logic_countdown = PmdrCountdownTimer(self.task_manager)
-        self.timer_logic_countup = CountUpTimer(self.task_manager)
+        self.timer_logic_countdown = PmdrCountdownTimer(self.task_manager, self.atomic_analyzer)
+        self.timer_logic_countup = CountUpTimer(self.task_manager, self.atomic_analyzer)
         
         # Aktif timer (başlangıçta countdown)
         self.timer_logic = self.timer_logic_countdown
@@ -48,6 +53,11 @@ class MainWindow(QMainWindow):
         self.timer_logic_countup.task_changed_signal.connect(self.on_task_changed)
 
         self.init_ui()
+
+        # Oturum DB'ye yazılınca gün panelini tazele
+        self.timer_logic_countdown.session_saved_signal.connect(self.day_panel.refresh)
+        self.timer_logic_countup.session_saved_signal.connect(self.day_panel.refresh)
+
         self.timer_logic_countdown.reset()
 
         # Timer durumlarını dinleyerek DND'yi yönetmeliyiz (sadece countdown için)
@@ -159,6 +169,12 @@ class MainWindow(QMainWindow):
         self.lbl_timer_countup.setAlignment(Qt.AlignCenter)
         self.lbl_timer_countup.setVisible(False)
         main_layout.addWidget(self.lbl_timer_countup)
+
+        # Gün paneli (açılır özet, her iki modda da görünür)
+        self.day_panel = DayPanel()
+        self.day_panel.block_clicked.connect(self.open_block_detail)
+        self.day_panel.expanded_changed.connect(self.on_day_panel_toggled)
+        main_layout.addWidget(self.day_panel)
 
         # Butonlar (countdown için)
         btn_layout = QHBoxLayout()
@@ -337,9 +353,11 @@ class MainWindow(QMainWindow):
         is_running = self.timer_logic_countdown.start_stop()
 
         if is_running:
+            self.notifier.play_start_counter_sound()
             self.btn_start.setText("Duraklat")
             self.check_dnd_status() # Timer başladı, DND gerekirse aç
         else:
+            self.notifier.play_pause_counter_sound()
             self.btn_start.setText("Devam Et")
             self.dnd_manager.disable_dnd() # Duraklatılınca bildirimler gelsin
     
@@ -348,8 +366,10 @@ class MainWindow(QMainWindow):
         is_running = self.timer_logic_countup.start_stop()
         
         if is_running:
+            self.notifier.play_start_counter_sound()
             self.btn_start_countup.setText("Duraklat")
         else:
+            self.notifier.play_pause_counter_sound()
             self.btn_start_countup.setText("Devam Et")
     
     def reset_timer_countup(self):
@@ -434,13 +454,15 @@ class MainWindow(QMainWindow):
     
     def open_tasks(self):
         """Task yönetim penceresini aç."""
-        if self.task_window is None or not self.task_window.isVisible():
+        if not self._window_alive(self.task_window) or not self.task_window.isVisible():
+            if self._window_alive(self.task_window):
+                self.task_window.deleteLater()
             self.task_window = TaskWindow(self.task_manager, self)
+            self.task_window.setAttribute(Qt.WA_DeleteOnClose)
             self.task_window.task_selected_signal.connect(self.on_task_selected_from_dialog)
-            self.task_window.setModal(False)  # Non-modal yap
+            self.task_window.setModal(False)
             self.task_window.show()
         else:
-            # Zaten açıksa öne getir
             self.task_window.raise_()
             self.task_window.activateWindow()
     
@@ -450,33 +472,53 @@ class MainWindow(QMainWindow):
         self.timer_logic.set_task(task_id)
     
     def open_settings(self):
-        dialog = SettingsDialog(self)
-        if dialog.exec(): 
+        dialog = SettingsDialog(self, notifier=self.notifier)
+        if dialog.exec():
             self.timer_logic.reload_settings()
             if not self.timer_logic.is_running:
                 self.timer_logic.reset()
 
+    def _window_alive(self, win):
+        """Qt C++ nesnesi silinmişse False döner."""
+        if win is None:
+            return False
+        try:
+            win.isVisible()
+            return True
+        except RuntimeError:
+            return False
+
     def open_stats(self):
         """İstatistik penceresini aç."""
-        if self.stats_window is None or not self.stats_window.isVisible():
+        if not self._window_alive(self.stats_window) or not self.stats_window.isVisible():
+            if self._window_alive(self.stats_window):
+                self.stats_window.deleteLater()
             self.stats_window = StatsWindow(self)
-            self.stats_window.setModal(False)  # Non-modal yap
             self.stats_window.show()
         else:
-            # Zaten açıksa öne getir
             self.stats_window.raise_()
             self.stats_window.activateWindow()
-    
+
     def open_recursive_tasks(self):
         """Özyinelemeli görev yönetim penceresini aç."""
-        if self.recursive_task_window is None or not self.recursive_task_window.isVisible():
+        if not self._window_alive(self.recursive_task_window) or not self.recursive_task_window.isVisible():
+            if self._window_alive(self.recursive_task_window):
+                self.recursive_task_window.deleteLater()
             self.recursive_task_window = RecursiveTaskWindow(self)
-            # setModal(False) zaten __init__ içinde yapılıyor
+            self.recursive_task_window.setAttribute(Qt.WA_DeleteOnClose)
             self.recursive_task_window.show()
         else:
-            # Zaten açıksa öne getir
             self.recursive_task_window.raise_()
             self.recursive_task_window.activateWindow()
+
+    def open_block_detail(self, block, color):
+        """Gün panelinden seçilen bloğun ayrıntılı raporunu aç."""
+        dialog = BlockDetailDialog(build_block_report(block, color), self)
+        dialog.show()
+
+    def on_day_panel_toggled(self, expanded):
+        """Panel açılınca pencere uzasın, kapanınca eski boyuna dönsün."""
+        QTimer.singleShot(0, lambda: self.resize(self.width(), self.sizeHint().height()))
 
     def manual_dnd_toggle(self, checked):
         """Kullanıcı kutucuğa tıkladığında ne olsun?"""
