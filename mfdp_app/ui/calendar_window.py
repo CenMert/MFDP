@@ -33,6 +33,8 @@ HEADER_H = 24
 DAY_NUM_H = 18
 LANE_H = 15
 MAX_LANES = 3
+COL_GAP = 2   # yan yana günler arası
+ROW_GAP = 5   # hafta satırları arası
 EVENT_H = 14
 
 
@@ -88,23 +90,25 @@ class MonthGrid(QWidget):
     def _lane_count(self):
         return min(MAX_LANES, max((l for _, l in self.ranges), default=-1) + 1)
 
+    def _cell_size(self):
+        cw = (self.width() - 6 * COL_GAP) / 7
+        ch = (self.height() - HEADER_H - (self._rows - 1) * ROW_GAP) / self._rows
+        return cw, ch
+
     def _cell_rect(self, index):
-        cw = self.width() / 7
-        ch = (self.height() - HEADER_H) / self._rows
+        cw, ch = self._cell_size()
         row, col = divmod(index, 7)
-        return QRect(int(col * cw), int(HEADER_H + row * ch), int(cw), int(ch))
+        return QRect(round(col * (cw + COL_GAP)), round(HEADER_H + row * (ch + ROW_GAP)),
+                     round(cw), round(ch))
 
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton or self._grid_start is None:
             return
-        cw = self.width() / 7
-        ch = (self.height() - HEADER_H) / self._rows
-        pos = e.position()
-        if pos.y() < HEADER_H:
-            return
-        col, row = int(pos.x() // cw), int((pos.y() - HEADER_H) // ch)
-        if 0 <= col < 7 and 0 <= row < self._rows:
-            self.day_clicked.emit(self._grid_start + datetime.timedelta(days=row * 7 + col))
+        pos = e.position().toPoint()
+        for i in range(self._rows * 7):
+            if self._cell_rect(i).contains(pos):
+                self.day_clicked.emit(self._grid_start + datetime.timedelta(days=i))
+                return
 
     def paintEvent(self, _):
         if self._grid_start is None:
@@ -118,10 +122,10 @@ class MonthGrid(QWidget):
         lanes = self._lane_count()
 
         # Weekday header
-        cw = self.width() / 7
         p.setPen(QColor(SUBTEXT))
         for c, name in enumerate(WEEKDAYS):
-            p.drawText(QRect(int(c * cw), 0, int(cw), HEADER_H), Qt.AlignCenter, name)
+            p.drawText(QRect(self._cell_rect(c).left(), 0, self._cell_rect(c).width(), HEADER_H),
+                       Qt.AlignCenter, name)
 
         # Cells, day numbers, events
         for i in range(self._rows * 7):
