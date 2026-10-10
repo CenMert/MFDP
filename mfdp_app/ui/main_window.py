@@ -552,21 +552,27 @@ class MainWindow(QMainWindow):
         self.mini_window.set_color(color)
 
     def open_mini(self):
-        """Mini moda geç: ana pencereyi gizle, süre + renk penceresini göster."""
+        """Mini pencereyi göster (ana pencere açık kalır)."""
         if self.mini_window is None:
             self.mini_window = MiniWindow()
             self.mini_window.restore_requested.connect(self.close_mini)
+            self.mini_window.toggle_requested.connect(self.mini_toggle)
         lbl = self.lbl_timer if self.timer_mode == "countdown" else self.lbl_timer_countup
         self.mini_window.set_time(lbl.text())
+        self.mini_window.set_paused(not self.timer_logic.is_running)
         self._mini_sync_color(self.timer_logic.current_task_id)
         self.mini_window.show()
-        self.hide()
+
+    def mini_toggle(self):
+        """Mini pencereye tek tık: duraklat / devam."""
+        if self.timer_mode == "countdown":
+            self.toggle_timer()
+        else:
+            self.toggle_timer_countup()
+        self.mini_window.set_paused(not self.timer_logic.is_running)
 
     def close_mini(self):
         self.mini_window.hide()
-        self.show()
-        self.raise_()
-        self.activateWindow()
 
     def open_recursive_tasks(self):
         """Özyinelemeli görev yönetim penceresini aç."""
