@@ -13,6 +13,7 @@ from mfdp_app.ui.calendar_window import CalendarWindow
 from mfdp_app.ui.task_window import TaskWindow
 from mfdp_app.ui.recursive_task_window import RecursiveTaskWindow
 from mfdp_app.ui.day_panel import DayPanel
+from mfdp_app.ui.mini_window import MiniWindow
 from mfdp_app.ui.block_detail_dialog import BlockDetailDialog
 from mfdp_app.core.daily_report import build_block_report
 
@@ -32,6 +33,7 @@ class MainWindow(QMainWindow):
         self.task_window = None
         self.stats_window = None
         self.calendar_window = None
+        self.mini_window = None
 
         # Timer modu ve instance'ları
         self.timer_mode = "countdown"  # "countdown" veya "countup"
@@ -295,6 +297,15 @@ class MainWindow(QMainWindow):
 
         settings_layout.addSpacing(10)
 
+        # Mini Mod Butonu
+        self.btn_mini = QPushButton("Mini")
+        self.btn_mini.setCursor(Qt.PointingHandCursor)
+        self.btn_mini.clicked.connect(self.open_mini)
+        self.btn_mini.setFixedWidth(100)
+        settings_layout.addWidget(self.btn_mini)
+
+        settings_layout.addSpacing(10)
+
         self.btn_settings = QPushButton("Ayarlar")
         self.btn_settings.setCursor(Qt.PointingHandCursor)
         self.btn_settings.clicked.connect(self.open_settings)
@@ -398,6 +409,7 @@ class MainWindow(QMainWindow):
     
     def update_timer_label_countup(self, time_str):
         """Count-up timer label'ını güncelle."""
+        self._mini_set_time(time_str)
         self.lbl_timer_countup.setText(time_str)
     
     def on_timer_finished_countup(self, finished_mode):
@@ -406,6 +418,7 @@ class MainWindow(QMainWindow):
         self.btn_start_countup.setText("Başlat")
             
     def update_timer_label(self, time_str):
+        self._mini_set_time(time_str)
         self.lbl_timer.setText(time_str)
 
     def update_status_label(self, mode):
@@ -418,6 +431,7 @@ class MainWindow(QMainWindow):
     
     def on_task_changed(self, task_id):
         """Aktif task değiştiğinde."""
+        self._mini_sync_color(task_id)
         if task_id == -1 or task_id is None:
             self.btn_tag.setText("")
             self.btn_task_name.setText("")
@@ -522,6 +536,38 @@ class MainWindow(QMainWindow):
             self.calendar_window.raise_()
             self.calendar_window.activateWindow()
 
+    def _mini_set_time(self, time_str):
+        if self.mini_window is not None:
+            self.mini_window.set_time(time_str)
+
+    def _mini_sync_color(self, task_id):
+        if self.mini_window is None:
+            return
+        color = None
+        if task_id not in (None, -1):
+            task = self.task_manager.get_task_by_id(task_id)
+            if task:
+                tag_info = next((t for t in self.task_manager.get_all_tags() if t['name'] == task.tag), None)
+                color = tag_info.get('color') if tag_info else None
+        self.mini_window.set_color(color)
+
+    def open_mini(self):
+        """Mini moda geç: ana pencereyi gizle, süre + renk penceresini göster."""
+        if self.mini_window is None:
+            self.mini_window = MiniWindow()
+            self.mini_window.restore_requested.connect(self.close_mini)
+        lbl = self.lbl_timer if self.timer_mode == "countdown" else self.lbl_timer_countup
+        self.mini_window.set_time(lbl.text())
+        self._mini_sync_color(self.timer_logic.current_task_id)
+        self.mini_window.show()
+        self.hide()
+
+    def close_mini(self):
+        self.mini_window.hide()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
     def open_recursive_tasks(self):
         """Özyinelemeli görev yönetim penceresini aç."""
         if not self._window_alive(self.recursive_task_window) or not self.recursive_task_window.isVisible():
@@ -573,6 +619,8 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event: QCloseEvent):
         """Uygulama kapanırken aktif timer'ları kaydet."""
+        if self.mini_window is not None:
+            self.mini_window.close()
         self.timer_logic_countdown.save_on_exit()
         self.timer_logic_countup.save_on_exit()
         event.accept()
