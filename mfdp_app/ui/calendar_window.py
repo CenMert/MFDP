@@ -3,10 +3,11 @@ import datetime
 
 from PySide6.QtCore import Qt, Signal, QRect, QDate, QTime
 from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPen
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
+from PySide6.QtWidgets import (QApplication, QFileDialog, QPlainTextEdit, QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
                                QWidget, QLineEdit, QComboBox, QDateEdit, QTimeEdit,
                                QCheckBox, QGroupBox, QMessageBox)
 
+from mfdp_app.core import calendar_io
 from mfdp_app.db.calendar_repository import CalendarRepository
 
 # Catppuccin Mocha
@@ -249,7 +250,7 @@ class DayDialog(QDialog):
         label = QLabel(html)
         label.setWordWrap(True)
         btn = QPushButton("Sil")
-        btn.setFixedWidth(50)
+        btn.setFixedWidth(100)
         btn.clicked.connect(on_delete)
         row.addWidget(label, 1)
         row.addWidget(btn)
@@ -326,6 +327,101 @@ class DayDialog(QDialog):
         self._refresh_list()
 
 
+class ImportDialog(QDialog):
+    """Paste/load AI-produced JSON, preview what will happen, then import."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Takvime içe aktar")
+        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.resize(560, 520)
+        self.imported = False
+        self._events, self._ranges = [], []
+
+        lay = QVBoxLayout(self)
+        lay.addWidget(QLabel(
+            "1) İstemi kopyala ve YZ'ye dosyanla birlikte ver.\n"
+            "2) YZ'nin döndürdüğü JSON'u aşağı yapıştır (ya da dosyadan yükle).\n"
+            "3) Önizle, sonra içe aktar."))
+        top = QHBoxLayout()
+        self.btn_prompt = QPushButton("YZ istemini kopyala")
+        self.btn_file = QPushButton("Dosyadan yükle")
+        top.addWidget(self.btn_prompt)
+        top.addWidget(self.btn_file)
+        top.addStretch()
+        lay.addLayout(top)
+
+        self.text = QPlainTextEdit()
+        self.text.setPlaceholderText('{"events": [...], "ranges": [...]}')
+        lay.addWidget(self.text, 1)
+        self.preview = QLabel()
+        self.preview.setWordWrap(True)
+        self.preview.setTextFormat(Qt.PlainText)
+        lay.addWidget(self.preview)
+
+        bottom = QHBoxLayout()
+        self.btn_preview = QPushButton("Önizle")
+        self.btn_import = QPushButton("İçe aktar")
+        self.btn_import.setEnabled(False)
+        bottom.addStretch()
+        bottom.addWidget(self.btn_preview)
+        bottom.addWidget(self.btn_import)
+        lay.addLayout(bottom)
+
+        self.btn_prompt.clicked.connect(self._copy_prompt)
+        self.btn_file.clicked.connect(self._load_file)
+        self.btn_preview.clicked.connect(self._preview)
+        self.btn_import.clicked.connect(self._import)
+        self.text.textChanged.connect(lambda: self.btn_import.setEnabled(False))
+
+    def _copy_prompt(self):
+        QApplication.clipboard().setText(calendar_io.AI_PROMPT)
+        self.preview.setText("İstem panoya kopyalandı.")
+
+    def _load_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "JSON dosyası seç", "", "JSON (*.json);;Tümü (*)")
+        if path:
+            try:
+                with open(path, encoding="utf-8") as f:
+                    self.text.setPlainText(f.read())
+            except OSError as e:
+                self.preview.setText(f"Dosya okunamadı: {e}")
+
+    @staticmethod
+    def _existing(events, ranges):
+        ev = {(e["title"], e["date"], e["time"]) for e in events}
+        rg = {(r["label"], r["start_date"], r["end_date"]) for r in ranges}
+        return ev, rg
+
+    def _preview(self):
+        events, ranges, problems = calendar_io.parse_import(self.text.toPlainText())
+        all_ev = CalendarRepository.get_events_between("0000-01-01", "9999-12-31")
+        all_rg = CalendarRepository.get_ranges_overlapping("0000-01-01", "9999-12-31")
+        have_ev, have_rg = self._existing(all_ev, all_rg)
+        self._events = [e for e in events if (e["title"], e["date"], e["time"]) not in have_ev]
+        self._ranges = [r for r in ranges if (r["label"], r["start_date"], r["end_date"]) not in have_rg]
+        dup = (len(events) - len(self._events)) + (len(ranges) - len(self._ranges))
+
+        lines = [f"{len(self._events)} olay, {len(self._ranges)} aralık eklenecek."]
+        if dup:
+            lines.append(f"{dup} kayıt zaten var, atlanacak.")
+        if problems:
+            lines.append(f"{len(problems)} uyarı:")
+            lines += [f"• {p}" for p in problems[:10]]
+            if len(problems) > 10:
+                lines.append(f"… ve {len(problems) - 10} uyarı daha.")
+        self.preview.setText("\n".join(lines))
+        self.btn_import.setEnabled(bool(self._events or self._ranges))
+
+    def _import(self):
+        for e in self._events:
+            CalendarRepository.add_event(e["title"], e["date"], e["kind"], e["time"], e["note"])
+        for r in self._ranges:
+            CalendarRepository.add_range(r["label"], r["start_date"], r["end_date"], r["color"])
+        self.imported = True
+        self.accept()
+
+
 class CalendarWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -348,6 +444,10 @@ class CalendarWindow(QDialog):
         f.setPointSize(f.pointSize() + 4)
         f.setBold(True)
         self.title.setFont(f)
+        self.btn_import = QPushButton("İçe aktar")
+        self.btn_export = QPushButton("Dışa aktar")
+        nav.addWidget(self.btn_import)
+        nav.addWidget(self.btn_export)
         nav.addWidget(self.btn_prev)
         nav.addWidget(self.title, 1)
         nav.addWidget(self.btn_today)
@@ -366,6 +466,8 @@ class CalendarWindow(QDialog):
         self.btn_prev.clicked.connect(lambda: self._shift(-1))
         self.btn_next.clicked.connect(lambda: self._shift(1))
         self.btn_today.clicked.connect(self._go_today)
+        self.btn_import.clicked.connect(self._open_import)
+        self.btn_export.clicked.connect(self._export)
         self.grid.day_clicked.connect(self._open_day)
         self._reload()
 
@@ -395,3 +497,20 @@ class CalendarWindow(QDialog):
         dlg = DayDialog(day, self)
         dlg.finished.connect(lambda _: self._reload())
         dlg.open()
+
+    def _open_import(self):
+        dlg = ImportDialog(self)
+        dlg.finished.connect(lambda _: self._reload())
+        dlg.open()
+
+    def _export(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Takvimi dışa aktar", "takvim.json", "JSON (*.json)")
+        if not path:
+            return
+        events = CalendarRepository.get_events_between("0000-01-01", "9999-12-31")
+        ranges = CalendarRepository.get_ranges_overlapping("0000-01-01", "9999-12-31")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(calendar_io.build_export(events, ranges))
+        except OSError as e:
+            QMessageBox.warning(self, "Dışa aktarılamadı", str(e))
