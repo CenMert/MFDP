@@ -2,7 +2,7 @@ import calendar
 import datetime
 
 from PySide6.QtCore import Qt, Signal, QRect, QDate, QTime
-from PySide6.QtGui import QPainter, QColor, QFont, QPen
+from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPen
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
                                QWidget, QLineEdit, QComboBox, QDateEdit, QTimeEdit,
                                QCheckBox, QGroupBox, QMessageBox)
@@ -30,12 +30,9 @@ MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz",
           "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
 
 HEADER_H = 24
-DAY_NUM_H = 18
-LANE_H = 15
 MAX_LANES = 3
-COL_GAP = 2   # yan yana günler arası
-ROW_GAP = 5   # hafta satırları arası
-EVENT_H = 14
+COL_GAP = 8   # yan yana günler arası
+ROW_GAP = 10   # hafta satırları arası
 
 
 def _iso(d):
@@ -52,7 +49,7 @@ class MonthGrid(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(640, 420)
+        self.setMinimumSize(700, 480)
         self.year = datetime.date.today().year
         self.month = datetime.date.today().month
         self.events = {}   # iso date -> [event dict]
@@ -87,8 +84,14 @@ class MonthGrid(QWidget):
             self.ranges.append((r, lane))
         self.update()
 
-    def _lane_count(self):
-        return min(MAX_LANES, max((l for _, l in self.ranges), default=-1) + 1)
+    def _row_lanes(self, row):
+        """Lanes reserved in a week row: only as many as its ranges need."""
+        row_start = self._grid_start + datetime.timedelta(days=row * 7)
+        row_end = row_start + datetime.timedelta(days=6)
+        top = max((l for r, l in self.ranges
+                   if _parse(r["start_date"]) <= row_end and _parse(r["end_date"]) >= row_start),
+                  default=-1)
+        return min(MAX_LANES, top + 1)
 
     def _cell_size(self):
         cw = (self.width() - 6 * COL_GAP) / 7
@@ -117,9 +120,12 @@ class MonthGrid(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         p.fillRect(self.rect(), QColor(BASE))
         small = QFont(self.font())
-        small.setPointSize(max(7, self.font().pointSize() - 2))
+        small.setPointSize(max(10, self.font().pointSize() + 1))
+        fm = QFontMetrics(small)
+        LANE_H = fm.height() + 4
+        EVENT_H = fm.height() + 2
+        DAY_NUM_H = 22
         today = datetime.date.today()
-        lanes = self._lane_count()
 
         # Weekday header
         p.setPen(QColor(SUBTEXT))
@@ -140,25 +146,26 @@ class MonthGrid(QWidget):
             if d == today:
                 p.setPen(Qt.NoPen)
                 p.setBrush(QColor("#a6e3a1"))
-                p.drawEllipse(rect.left() + 4, rect.top() + 2, 16, 16)
+                p.drawEllipse(rect.left() + 4, rect.top() + 2, 20, 20)
                 p.setPen(QColor(BASE))
             else:
                 p.setPen(QColor(TEXT if in_month else OVERLAY))
-            p.drawText(QRect(rect.left() + 4, rect.top() + 2, 16, 16), Qt.AlignCenter, str(d.day))
+            p.drawText(QRect(rect.left() + 4, rect.top() + 2, 20, 20), Qt.AlignCenter, str(d.day))
 
             p.setFont(small)
             evs = self.events.get(_iso(d), [])
+            lanes = self._row_lanes(i // 7)
             y = rect.top() + DAY_NUM_H + lanes * LANE_H + 2
             fit = max(0, (rect.bottom() - y) // EVENT_H)
-            shown = evs if len(evs) <= fit else evs[:max(0, fit - 1)]
+            shown = evs if len(evs) <= fit else evs[:max(0, fit - 1)]  # last line left for "+N daha"
             for ev in shown:
                 color = QColor(EVENT_KINDS.get(ev["kind"], EVENT_KINDS["diger"])[1])
                 p.setPen(Qt.NoPen)
                 p.setBrush(color)
-                p.drawRoundedRect(rect.left() + 4, y + 3, 6, 6, 3, 3)
+                p.drawRoundedRect(rect.left() + 4, y + EVENT_H // 2 - 4, 8, 8, 4, 4)
                 p.setPen(QColor(TEXT if in_month else SUBTEXT))
-                text = p.fontMetrics().elidedText(ev["title"], Qt.ElideRight, rect.width() - 16)
-                p.drawText(QRect(rect.left() + 13, y, rect.width() - 15, EVENT_H),
+                text = p.fontMetrics().elidedText(ev["title"], Qt.ElideRight, rect.width() - 20)
+                p.drawText(QRect(rect.left() + 16, y, rect.width() - 18, EVENT_H),
                            Qt.AlignVCenter | Qt.AlignLeft, text)
                 y += EVENT_H
             if len(shown) < len(evs):
@@ -323,7 +330,7 @@ class CalendarWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Takvim - MFDP")
-        self.resize(800, 600)
+        self.resize(900, 700)
         self.setModal(False)
         # Free the grid and its data when closed
         self.setAttribute(Qt.WA_DeleteOnClose)
