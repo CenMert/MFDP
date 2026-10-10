@@ -20,6 +20,7 @@ from mfdp_app.db.session_repository import SessionRepository
 from mfdp_app.db.task_repository import TaskRepository
 from mfdp_app.db.tag_repository import TagRepository
 from mfdp_app.db.atomic_event_repository import AtomicEventRepository
+from mfdp_app.db.calendar_repository import CalendarRepository
 
 # --- INITIALIZATION ---
 
@@ -255,3 +256,35 @@ def delete_atomic_events_for_session(session_id):
 def get_atomic_event_heatmap(days=14, event_types=None):
     """Get atomic events heatmap."""
     return AtomicEventRepository.get_heatmap(days, event_types)
+
+
+# --- CALENDAR (Forwarded to CalendarRepository) ---
+
+def get_calendar_events(start_date, end_date):
+    """Get calendar events between two ISO dates (inclusive)."""
+    return CalendarRepository.get_events_between(start_date, end_date)
+
+
+def add_calendar_event(title, date, kind="diger", time=None, note=None):
+    """Add a calendar event."""
+    return CalendarRepository.add_event(title, date, kind, time, note)
+
+
+def delete_calendar_event(event_id):
+    """Delete a calendar event."""
+    return CalendarRepository.delete_event(event_id)
+
+
+def get_calendar_ranges(start_date, end_date):
+    """Get calendar ranges overlapping the given ISO dates."""
+    return CalendarRepository.get_ranges_overlapping(start_date, end_date)
+
+
+def add_calendar_range(label, start_date, end_date, color=None):
+    """Add a calendar range."""
+    return CalendarRepository.add_range(label, start_date, end_date, color)
+
+
+def delete_calendar_range(range_id):
+    """Delete a calendar range."""
+    return CalendarRepository.delete_range(range_id)

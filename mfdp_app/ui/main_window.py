@@ -9,6 +9,7 @@ from mfdp_app.core.task_manager import TaskManager
 from mfdp_app.core.atomic_analyzer import AtomicAnalyzer
 from mfdp_app.ui.settings_dialog import SettingsDialog
 from mfdp_app.ui.stats_window import StatsWindow
+from mfdp_app.ui.calendar_window import CalendarWindow
 from mfdp_app.ui.task_window import TaskWindow
 from mfdp_app.ui.recursive_task_window import RecursiveTaskWindow
 from mfdp_app.ui.day_panel import DayPanel
@@ -30,6 +31,7 @@ class MainWindow(QMainWindow):
         self.recursive_task_window = None
         self.task_window = None
         self.stats_window = None
+        self.calendar_window = None
 
         # Timer modu ve instance'ları
         self.timer_mode = "countdown"  # "countdown" veya "countup"
@@ -283,6 +285,16 @@ class MainWindow(QMainWindow):
 
         settings_layout.addSpacing(10)
 
+        # Takvim Butonu
+        self.btn_calendar = QPushButton("Takvim")
+        self.btn_calendar.setCursor(Qt.PointingHandCursor)
+        self.btn_calendar.clicked.connect(self.open_calendar)
+        self.btn_calendar.setFixedWidth(100)
+        self.btn_calendar.setStyleSheet("background-color: #94e2d5; color: #1e1e2e; font-weight: bold; border: none;")
+        settings_layout.addWidget(self.btn_calendar)
+
+        settings_layout.addSpacing(10)
+
         self.btn_settings = QPushButton("Ayarlar")
         self.btn_settings.setCursor(Qt.PointingHandCursor)
         self.btn_settings.clicked.connect(self.open_settings)
@@ -498,6 +510,17 @@ class MainWindow(QMainWindow):
         else:
             self.stats_window.raise_()
             self.stats_window.activateWindow()
+
+    def open_calendar(self):
+        """Takvim penceresini aç."""
+        if not self._window_alive(self.calendar_window) or not self.calendar_window.isVisible():
+            if self._window_alive(self.calendar_window):
+                self.calendar_window.deleteLater()
+            self.calendar_window = CalendarWindow(self)
+            self.calendar_window.show()
+        else:
+            self.calendar_window.raise_()
+            self.calendar_window.activateWindow()
 
     def open_recursive_tasks(self):
         """Özyinelemeli görev yönetim penceresini aç."""

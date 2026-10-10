@@ -120,6 +120,31 @@ class DatabaseInitializer:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_atomic_events_timestamp ON atomic_events (timestamp);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_atomic_events_elapsed_seconds ON atomic_events (elapsed_seconds);")
             
+            # 6. Calendar tables
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS calendar_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                date TEXT NOT NULL,
+                time TEXT,
+                kind TEXT NOT NULL DEFAULT 'diger',
+                note TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS calendar_ranges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                label TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                color TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_calendar_events_date ON calendar_events (date);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_calendar_ranges_start ON calendar_ranges (start_date, end_date);")
+
             conn.commit()
             print("✅ Database V2 schema initialized successfully.")
             return True
@@ -144,7 +169,7 @@ class DatabaseInitializer:
         
         try:
             cursor = conn.cursor()
-            required_tables = ['settings', 'sessions_v2', 'tasks', 'tags', 'atomic_events']
+            required_tables = ['settings', 'sessions_v2', 'tasks', 'tags', 'atomic_events', 'calendar_events', 'calendar_ranges']
             
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             existing_tables = {row[0] for row in cursor.fetchall()}
@@ -179,7 +204,7 @@ class DatabaseInitializer:
         
         try:
             cursor = conn.cursor()
-            tables = ['atomic_events', 'tasks', 'tags', 'sessions_v2', 'settings']
+            tables = ['calendar_events', 'calendar_ranges', 'atomic_events', 'tasks', 'tags', 'sessions_v2', 'settings']
             
             for table in tables:
                 cursor.execute(f"DROP TABLE IF EXISTS {table}")
