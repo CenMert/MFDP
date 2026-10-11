@@ -21,7 +21,7 @@ PlasmoidItem {
     readonly property string toggleCmd: "busctl --user call org.mfdp.Timer /Timer org.mfdp.Timer Toggle"
 
     Plasmoid.status: PlasmaCore.Types.ActiveStatus
-    preferredRepresentation: compactRepresentation
+    preferredRepresentation: fullRepresentation
 
     function currentSeconds() {
         tick; // bağımlılık
@@ -77,7 +77,7 @@ PlasmoidItem {
         onTriggered: root.tick++
     }
 
-    compactRepresentation: MouseArea {
+    fullRepresentation: MouseArea {
         id: area
         readonly property real dotSize: Kirigami.Units.gridUnit * 0.7
         Layout.minimumWidth: root.appOpen ? row.implicitWidth + Kirigami.Units.smallSpacing * 2 : Kirigami.Units.iconSizes.medium
@@ -124,7 +124,7 @@ PlasmoidItem {
                 text: root.format(root.currentSeconds())
                 color: Kirigami.Theme.textColor
                 opacity: root.running ? 1.0 : 0.5
-                font.pixelSize: Math.max(Kirigami.Theme.defaultFont.pixelSize, area.height * 0.5)
+                font.pixelSize: Math.min(area.height * 0.5, Kirigami.Units.gridUnit * 1.2)
                 font.bold: true
                 font.family: Kirigami.Theme.fixedWidthFont.family
             }
