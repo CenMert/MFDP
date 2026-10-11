@@ -20,7 +20,7 @@ PlasmoidItem {
     readonly property string readCmd: "cat \"${XDG_RUNTIME_DIR}/mfdp/state.json\" 2>/dev/null"
     readonly property string toggleCmd: "busctl --user call org.mfdp.Timer /Timer org.mfdp.Timer Toggle"
 
-    Plasmoid.status: appOpen ? PlasmaCore.Types.ActiveStatus : PlasmaCore.Types.HiddenStatus
+    Plasmoid.status: PlasmaCore.Types.ActiveStatus
     preferredRepresentation: compactRepresentation
 
     function currentSeconds() {
@@ -80,14 +80,25 @@ PlasmoidItem {
     compactRepresentation: MouseArea {
         id: area
         readonly property real dotSize: Kirigami.Units.gridUnit * 0.7
-        Layout.minimumWidth: root.appOpen ? row.implicitWidth + Kirigami.Units.smallSpacing * 2 : 0
+        Layout.minimumWidth: root.appOpen ? row.implicitWidth + Kirigami.Units.smallSpacing * 2 : Kirigami.Units.iconSizes.medium
         Layout.preferredWidth: Layout.minimumWidth
         Layout.maximumWidth: Layout.minimumWidth
-        visible: root.appOpen
         hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
+        cursorShape: root.appOpen ? Qt.PointingHandCursor : Qt.ArrowCursor
+
+        // MFDP kapalıyken soluk simge (widget bulunabilir kalsın)
+        Kirigami.Icon {
+            anchors.centerIn: parent
+            width: Math.min(parent.height, Kirigami.Units.iconSizes.medium)
+            height: width
+            source: "chronometer"
+            opacity: 0.4
+            visible: !root.appOpen
+        }
 
         onClicked: {
+            if (!root.appOpen)
+                return;
             exec.connectSource(root.toggleCmd);
             // hızlı geri bildirim: yerelde de durumu çevir, bir sonraki okuma düzeltir
             root.baseSeconds = root.currentSeconds();
@@ -97,6 +108,7 @@ PlasmoidItem {
 
         RowLayout {
             id: row
+            visible: root.appOpen
             anchors.centerIn: parent
             spacing: Kirigami.Units.smallSpacing
 

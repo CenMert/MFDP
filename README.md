@@ -179,4 +179,4 @@ Zamanlayıcıyı (görev rengi + süre) Plasma paneline widget olarak ekleyebili
 bash install_plasmoid.sh   # kurar/günceller
 ```
 
-Sonra panele sağ tık → Widget ekle → "MFDP Timer". Widget tıklayınca duraklatır/devam ettirir; MFDP kapalıyken görünmez. Uygulama durumu `$XDG_RUNTIME_DIR/mfdp/state.json` dosyasına yazar, komutu `org.mfdp.Timer.Toggle` D-Bus çağrısıyla alır.
+Sonra panele sağ tık → Widget ekle → "MFDP Timer". Widget tıklayınca duraklatır/devam ettirir; MFDP kapalıyken soluk bir simge gösterir. Uygulama durumu `$XDG_RUNTIME_DIR/mfdp/state.json` dosyasına yazar, komutu `org.mfdp.Timer.Toggle` D-Bus çağrısıyla alır.
