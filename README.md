@@ -170,3 +170,13 @@ mfdp_app/
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## KDE Panel Widget
+
+Zamanlayıcıyı (görev rengi + süre) Plasma paneline widget olarak ekleyebilirsin:
+
+```bash
+bash install_plasmoid.sh   # kurar/günceller
+```
+
+Sonra panele sağ tık → Widget ekle → "MFDP Timer". Widget tıklayınca duraklatır/devam ettirir; MFDP kapalıyken görünmez. Uygulama durumu `$XDG_RUNTIME_DIR/mfdp/state.json` dosyasına yazar, komutu `org.mfdp.Timer.Toggle` D-Bus çağrısıyla alır.

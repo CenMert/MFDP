@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "MFDP"
+            }
+        ],
+        "Description": "Shows the running MFDP focus timer (task color + time) in the panel",
+        "Icon": "chronometer",
+        "Id": "org.mfdp.timer",
+        "License": "MIT",
+        "Name": "MFDP Timer",
+        "Version": "1.0",
+        "Category": "Utilities"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

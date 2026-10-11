@@ -7,6 +7,7 @@ from mfdp_app.core.timer import PmdrCountdownTimer, CountUpTimer
 from mfdp_app.core.dnd_manager import DNDManager
 from mfdp_app.core.task_manager import TaskManager
 from mfdp_app.core.atomic_analyzer import AtomicAnalyzer
+from mfdp_app.core.panel_bridge import PanelBridge
 from mfdp_app.ui.settings_dialog import SettingsDialog
 from mfdp_app.ui.stats_window import StatsWindow
 from mfdp_app.ui.calendar_window import CalendarWindow
@@ -77,6 +78,10 @@ class MainWindow(QMainWindow):
             self.on_task_changed(active_task_id)
         else:
             self.on_task_changed(-1)
+
+        # KDE panel widget köprüsü (durum dosyası + D-Bus Toggle)
+        self.panel_bridge = PanelBridge(self._panel_snapshot, self)
+        self.panel_bridge.toggle_requested.connect(self.mini_toggle)
 
     def init_ui(self):
         central_widget = QWidget()
@@ -540,16 +545,29 @@ class MainWindow(QMainWindow):
         if self.mini_window is not None:
             self.mini_window.set_time(time_str)
 
+    def _task_color(self, task_id):
+        """Görevin etiket rengi; görev yoksa None."""
+        if task_id in (None, -1):
+            return None
+        task = self.task_manager.get_task_by_id(task_id)
+        if not task:
+            return None
+        tag_info = next((t for t in self.task_manager.get_all_tags() if t['name'] == task.tag), None)
+        return tag_info.get('color') if tag_info else None
+
     def _mini_sync_color(self, task_id):
         if self.mini_window is None:
             return
-        color = None
-        if task_id not in (None, -1):
-            task = self.task_manager.get_task_by_id(task_id)
-            if task:
-                tag_info = next((t for t in self.task_manager.get_all_tags() if t['name'] == task.tag), None)
-                color = tag_info.get('color') if tag_info else None
-        self.mini_window.set_color(color)
+        self.mini_window.set_color(self._task_color(task_id))
+
+    def _panel_snapshot(self):
+        """KDE panel widget'ının okuyacağı durum."""
+        return {
+            "running": self.timer_logic.is_running,
+            "mode": self.timer_mode,
+            "seconds": self.timer_logic.current_time,
+            "color": self._task_color(self.timer_logic.current_task_id),
+        }
 
     def open_mini(self):
         """Mini pencereyi göster (ana pencere açık kalır)."""
@@ -569,7 +587,9 @@ class MainWindow(QMainWindow):
             self.toggle_timer()
         else:
             self.toggle_timer_countup()
-        self.mini_window.set_paused(not self.timer_logic.is_running)
+        if self.mini_window is not None:
+            self.mini_window.set_paused(not self.timer_logic.is_running)
+        self.panel_bridge.publish()
 
     def close_mini(self):
         self.mini_window.hide()
@@ -625,6 +645,7 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event: QCloseEvent):
         """Uygulama kapanırken aktif timer'ları kaydet."""
+        self.panel_bridge.shutdown()
         if self.mini_window is not None:
             self.mini_window.close()
         self.timer_logic_countdown.save_on_exit()
