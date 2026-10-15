@@ -97,10 +97,6 @@ QCheckBox::indicator:checked {
    veya basit bir stil ile devam edebiliriz. */
 
 /* mfdp_app/ui/styles.py içine eklenebilir */
-QCheckBox#DNDCheckbox::indicator:checked {
-    background-color: #f38ba8; /* Pastel Kırmızı (Uyarı rengi) */
-    border-color: #f38ba8;
-}
 
 /* Gün Paneli (timer altındaki açılır özet) */
 QFrame#DayPanel {

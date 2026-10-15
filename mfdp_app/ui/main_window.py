@@ -24,7 +24,6 @@ class MainWindow(QMainWindow):
         
         self.notifier = Notifier()
         self.dnd_manager = DNDManager(self)
-        self._dnd_manual = False  # Tuşla açılan DND timer'dan bağımsız kalır
         self.task_manager = TaskManager()
         self.atomic_analyzer = AtomicAnalyzer()
         self.setWindowTitle("MFDP - Focus")
@@ -66,10 +65,7 @@ class MainWindow(QMainWindow):
 
         self.timer_logic_countdown.reset()
 
-        # Timer durumlarını dinleyerek DND'yi yönet
-        self.timer_logic_countdown.state_changed_signal.connect(self.check_dnd_status)
-        self.timer_logic_countdown.finished_signal.connect(self._release_auto_dnd)
-        self.timer_logic_countup.finished_signal.connect(self._release_auto_dnd)
+        # DND sadece tuş / Ctrl+D ile yönetilir
         self.dnd_manager.dnd_changed_signal.connect(self.on_dnd_changed)
         QShortcut(QKeySequence("Ctrl+D"), self, self.toggle_dnd_manual)
         
@@ -256,17 +252,7 @@ class MainWindow(QMainWindow):
         
         settings_layout.addStretch()
 
-        # YENİ: DND Checkbox
-        self.chk_dnd = QCheckBox("Rahatsız Etme")
-        self.chk_dnd.setObjectName("DNDCheckbox")
-        self.chk_dnd.setChecked(False) # Varsayılan kapalı olsun, kullanıcı seçsin
-        self.chk_dnd.setCursor(Qt.PointingHandCursor)
-        # Eğer kullanıcı kutucuğu manuel kapatırsa, aktif DND'yi de iptal et
-        self.chk_dnd.toggled.connect(self.manual_dnd_toggle)
-
-        settings_layout.addWidget(self.chk_dnd)
-
-        # Manuel DND tuşu: timer'dan bağımsız aç/kapat (Ctrl+D)
+        # DND tuşu: sistem genelinde Rahatsız Etme aç/kapat (Ctrl+D)
         self.btn_dnd = QPushButton("🔕")
         self.btn_dnd.setObjectName("DNDButton")
         self.btn_dnd.setCheckable(True)
@@ -391,21 +377,17 @@ class MainWindow(QMainWindow):
             # Aktif timer'ı değiştir
             self.timer_logic = self.timer_logic_countdown
             self.timer_logic_countdown.reset()
-
-        self.check_dnd_status()
     
     def toggle_timer(self):
-        """Başlat/Duraklat butonu mantığına DND kontrolü ekle (countdown için)."""
+        """Countdown timer için başlat/duraklat."""
         is_running = self.timer_logic_countdown.start_stop()
 
         if is_running:
             self.notifier.play_start_counter_sound()
             self.btn_start.setText("Duraklat")
-            self.check_dnd_status() # Timer başladı, DND gerekirse aç
         else:
             self.notifier.play_pause_counter_sound()
             self.btn_start.setText("Devam Et")
-            self._release_auto_dnd() # Duraklatılınca bildirimler gelsin
     
     def toggle_timer_countup(self):
         """Count-up timer için başlat/duraklat."""
@@ -417,21 +399,18 @@ class MainWindow(QMainWindow):
         else:
             self.notifier.play_pause_counter_sound()
             self.btn_start_countup.setText("Devam Et")
-        self.check_dnd_status()
     
     def reset_timer_countup(self):
         """Count-up timer'ı sıfırla."""
         self.timer_logic_countup.reset()
         self.btn_start_countup.setText("Başlat")
         self.lbl_timer_countup.setText("00:00")
-        self._release_auto_dnd()
     
     def complete_timer_countup(self):
         """Count-up timer'ı tamamla."""
         self.timer_logic_countup.complete()
         self.btn_start_countup.setText("Başlat")
         self.lbl_timer_countup.setText("00:00")
-        self._release_auto_dnd()
     
     def update_timer_label_countup(self, time_str):
         """Count-up timer label'ını güncelle."""
@@ -636,60 +615,20 @@ class MainWindow(QMainWindow):
         """Panel açılınca pencere uzasın, kapanınca eski boyuna dönsün."""
         QTimer.singleShot(0, lambda: self.resize(self.width(), self.sizeHint().height()))
 
-    def manual_dnd_toggle(self, checked):
-        """Otomatik DND kutucuğu değişince kuralı hemen uygula."""
-        # İşaretlendiyse ve zaten çalışıyorsak hemen açılır; kaldırıldıysa kapanır.
-        self.check_dnd_status()
-
     def toggle_dnd_manual(self):
-        """DND tuşu / Ctrl+D: timer'dan bağımsız aç-kapat."""
-        if self.dnd_manager.is_active:
-            self._dnd_manual = False
-            self.dnd_manager.disable_dnd()
-        else:
-            self._dnd_manual = True
-            self.dnd_manager.enable_dnd("Manual")
+        """DND tuşu / Ctrl+D: aç-kapat."""
+        self.dnd_manager.toggle_dnd()
         # Servis yoksa / hata olduysa tuş gerçek durumu göstersin
         self.btn_dnd.setChecked(self.dnd_manager.is_active)
 
     def on_dnd_changed(self, enabled):
         """DND gerçekten açıldı/kapandı: tuşu senkronla, olayı kaydet."""
-        if not enabled:
-            self._dnd_manual = False
         self.btn_dnd.setChecked(enabled)
         self.atomic_analyzer.record_dnd_toggle(enabled)
-
-    def _release_auto_dnd(self, *_):
-        """Timer durdu/bitti: otomatik açılan DND'yi kapat (manuel olana dokunma)."""
-        if not self._dnd_manual:
-            self.dnd_manager.disable_dnd()
-
-    def check_dnd_status(self, mode=None):
-        """Şu anki duruma göre DND açılmalı mı?"""
-        # Tuşla açıldıysa kullanıcı kapatana kadar dokunma
-        if self._dnd_manual:
-            return
-
-        # Eğer mode parametresi gelmediyse mevcut modu al
-        if not mode:
-            mode = getattr(self.timer_logic, "current_state", None)
-
-        # Kurallar:
-        # 1. Checkbox işaretli olmalı.
-        # 2. Timer çalışıyor olmalı (is_running).
-        # 3. Pomodoro'da mod "Focus" olmalı (Molada rahatsız edilmek isteyebiliriz).
-        #    Free Timer'da faz yok, çalışıyorsa yeter.
-        in_focus = self.timer_mode == "countup" or mode == "Focus"
-
-        if self.chk_dnd.isChecked() and self.timer_logic.is_running and in_focus:
-            self.dnd_manager.enable_dnd()
-        else:
-            self.dnd_manager.disable_dnd()
 
     def reset_timer(self):
         """Countdown timer'ı sıfırla."""
         self.timer_logic_countdown.reset()
-        self._release_auto_dnd()
     
     def closeEvent(self, event: QCloseEvent):
         """Uygulama kapanırken aktif timer'ları kaydet."""
