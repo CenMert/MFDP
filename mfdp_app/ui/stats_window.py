@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QWidget, 
-                               QScrollArea, QHBoxLayout, QComboBox, QTabWidget)
+                               QScrollArea, QHBoxLayout, QComboBox, QTabWidget, QPushButton)
 from PySide6.QtCore import Qt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -8,6 +8,7 @@ from mfdp_app.db.session_repository import SessionRepository
 from mfdp_app.db.tag_repository import TagRepository
 from mfdp_app.db.atomic_event_repository import AtomicEventRepository
 import numpy as np
+from mfdp_app.ui.manual_session_dialog import ManualSessionDialog
 
 
 class StatsWindow(QDialog):
@@ -75,13 +76,60 @@ class StatsWindow(QDialog):
         # Load the first tab
         self._on_tab_changed(0)
 
-    def init_header(self, parent_layout):
+        # Footer: manual session entry
+        footer = QHBoxLayout()
+        self.add_session_btn = QPushButton("＋ Oturum Ekle")
+        self.add_session_btn.setToolTip("Evde değilken yaptığın çalışmayı elle ekle")
+        self.add_session_btn.setStyleSheet(
+            "QPushButton { background-color: #313244; color: #a6e3a1; border: 1px solid #45475a;"
+            " border-radius: 6px; padding: 8px 16px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #45475a; }")
+        self.add_session_btn.clicked.connect(self._open_manual_session)
+        footer.addWidget(self.add_session_btn)
+        footer.addStretch()
+        main_layout.addLayout(footer)
+
+    def _open_manual_session(self):
+        dlg = ManualSessionDialog(self)
+        if dlg.exec():
+            self._refresh_stats()
+
+    @classmethod
+    def _clear_layout(cls, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                cls._clear_layout(item.layout())
+
+    def _refresh_stats(self):
+        """Rebuild header and loaded tabs so the new session shows up."""
+        self._header_label.setText(self._header_text())
+        current = self.tabs.currentIndex()
+        for i, (title, _) in enumerate(self._tab_builders):
+            if not self._tab_loaded.get(title):
+                continue
+            layout = self.tabs.widget(i).layout()
+            self._clear_layout(layout)
+            self._tab_loaded[title] = False
+        for fig in self._active_figures:
+            plt.close(fig)
+        self._active_figures.clear()
+        self.atomic_heatmap_canvas = None
+        self.atomic_no_data_label = None
+        self._on_tab_changed(current)
+
+    @staticmethod
+    def _header_text():
         stats = SessionRepository.get_completion_rate()
         total = stats['completed'] + stats['interrupted']
         rate = int((stats['completed'] / total * 100)) if total > 0 else 0
-        header_text = f"Tamamlama Oranı: %{rate} ({stats['completed']} Tam / {total} Toplam)"
-        
-        lbl = QLabel(header_text)
+        return f"Tamamlama Oranı: %{rate} ({stats['completed']} Tam / {total} Toplam)"
+
+    def init_header(self, parent_layout):
+        lbl = QLabel(self._header_text())
+        self._header_label = lbl
         lbl.setStyleSheet("font-size: 18px; font-weight: bold; color: #a6e3a1; padding: 10px; background-color: #313244; border-radius: 8px;")
         lbl.setAlignment(Qt.AlignCenter)
         parent_layout.addWidget(lbl)
