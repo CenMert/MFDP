@@ -15,11 +15,25 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, Q
                                QFrame, QGridLayout)
 from PySide6.QtCore import Qt, QDate, QTime
 
+from mfdp_app.core.daily_report import DAY_START_HOUR, logical_day
 from mfdp_app.db.session_repository import SessionRepository
 from mfdp_app.db.task_repository import TaskRepository
 
 SLIDER_STEP_MIN = 5
 SLIDER_MAX_MIN = 12 * 60
+DAY_MIN = 24 * 60
+DAY_START_MIN = DAY_START_HOUR * 60
+
+
+def _offset(t: QTime, is_end: bool = False) -> int:
+    """Minutes since the logical day start (DAY_START_HOUR). End at day start == end of day."""
+    off = (t.hour() * 60 + t.minute() - DAY_START_MIN) % DAY_MIN
+    return DAY_MIN if (is_end and off == 0) else off
+
+
+def _time_from_offset(off: int) -> QTime:
+    m = (DAY_START_MIN + off) % DAY_MIN
+    return QTime(m // 60, m % 60)
 
 
 class TimePickerPopup(QFrame):
@@ -111,9 +125,10 @@ class ManualSessionDialog(QDialog):
             self.task_combo.addItem(f"{t.name}  [{t.tag}]" if t.tag else t.name, t)
         form.addRow("Görev:", self.task_combo)
 
-        self.date_edit = QDateEdit(QDate.currentDate())
+        today = QDate.fromString(logical_day(datetime.datetime.now()).isoformat(), Qt.ISODate)
+        self.date_edit = QDateEdit(today)
         self.date_edit.setCalendarPopup(True)
-        self.date_edit.setMaximumDate(QDate.currentDate())
+        self.date_edit.setMaximumDate(today)
         self.date_edit.setDisplayFormat("dd.MM.yyyy")
         form.addRow("Tarih:", self.date_edit)
 
@@ -188,6 +203,8 @@ class ManualSessionDialog(QDialog):
         self.date_edit.dateChanged.connect(self._on_times_changed)
         self.dur_slider.valueChanged.connect(self._on_slider_changed)
 
+        if self._duration_minutes() <= 0:  # e.g. just after the 03:00 day boundary
+            self.start_edit.setTime(_time_from_offset(0))
         self._set_mode(False)
         self._on_times_changed()
 
@@ -208,13 +225,20 @@ class ManualSessionDialog(QDialog):
         return row
 
     def _apply_duration(self, mins: int):
-        start = self.start_edit.time()
-        start_min = start.hour() * 60 + start.minute()
-        if start_min + mins > 24 * 60 - 1:
-            start_min = 24 * 60 - 1 - mins
-            self.start_edit.setTime(QTime(start_min // 60, start_min % 60))
-        end_min = start_min + mins
-        self.end_edit.setTime(QTime(end_min // 60, end_min % 60))
+        self._set_end_from_duration(mins)
+
+    def _set_end_from_duration(self, mins: int):
+        """end = start + mins within the logical day; pull start back if it would overflow."""
+        start_off = _offset(self.start_edit.time())
+        if start_off + mins > DAY_MIN:
+            start_off = DAY_MIN - mins
+            self._syncing = True
+            self.start_edit.setTime(_time_from_offset(start_off))
+            self._syncing = False
+        self._syncing = True
+        self.end_edit.setTime(_time_from_offset(start_off + mins))
+        self._syncing = False
+        self._on_times_changed()
 
     # ------------------------------------------------------------------
     # Mode handling
@@ -232,8 +256,7 @@ class ManualSessionDialog(QDialog):
     # Time <-> slider sync
     # ------------------------------------------------------------------
     def _duration_minutes(self) -> int:
-        s, e = self.start_edit.time(), self.end_edit.time()
-        return (e.hour() * 60 + e.minute()) - (s.hour() * 60 + s.minute())
+        return _offset(self.end_edit.time(), is_end=True) - _offset(self.start_edit.time())
 
     def _on_times_changed(self, *_):
         if self._syncing:
@@ -247,20 +270,7 @@ class ManualSessionDialog(QDialog):
     def _on_slider_changed(self, value):
         if self._syncing:
             return
-        value = round(value / SLIDER_STEP_MIN) * SLIDER_STEP_MIN
-        start = self.start_edit.time()
-        start_min = start.hour() * 60 + start.minute()
-        # Keep the session within the chosen day: cap by moving start earlier if needed.
-        if start_min + value > 24 * 60 - 1:
-            start_min = 24 * 60 - 1 - value
-            self._syncing = True
-            self.start_edit.setTime(QTime(start_min // 60, start_min % 60))
-            self._syncing = False
-        end_min = start_min + value
-        self._syncing = True
-        self.end_edit.setTime(QTime(end_min // 60, end_min % 60))
-        self._syncing = False
-        self._refresh_labels()
+        self._set_end_from_duration(round(value / SLIDER_STEP_MIN) * SLIDER_STEP_MIN)
 
     def _refresh_labels(self):
         mins = self._duration_minutes()
@@ -280,11 +290,10 @@ class ManualSessionDialog(QDialog):
             QMessageBox.warning(self, "Geçersiz aralık", "Bitiş zamanı başlangıçtan sonra olmalı.")
             return
 
-        d = self.date_edit.date().toPython()
-        s = self.start_edit.time().toPython().replace(second=0, microsecond=0)
-        e = self.end_edit.time().toPython().replace(second=0, microsecond=0)
-        start_dt = datetime.datetime.combine(d, s)
-        end_dt = datetime.datetime.combine(d, e)
+        day_start = datetime.datetime.combine(
+            self.date_edit.date().toPython(), datetime.time(hour=DAY_START_HOUR))
+        start_dt = day_start + datetime.timedelta(minutes=_offset(self.start_edit.time()))
+        end_dt = start_dt + datetime.timedelta(minutes=mins)
         if end_dt > datetime.datetime.now():
             QMessageBox.warning(self, "Geçersiz aralık", "Bitiş zamanı gelecekte olamaz.")
             return
