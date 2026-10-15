@@ -11,7 +11,8 @@ import datetime
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel,
                                QComboBox, QDateEdit, QTimeEdit, QPushButton, QSlider,
-                               QSpinBox, QCheckBox, QWidget, QMessageBox)
+                               QSpinBox, QCheckBox, QWidget, QMessageBox, QToolButton,
+                               QFrame, QGridLayout)
 from PySide6.QtCore import Qt, QDate, QTime
 
 from mfdp_app.db.session_repository import SessionRepository
@@ -19,6 +20,59 @@ from mfdp_app.db.task_repository import TaskRepository
 
 SLIDER_STEP_MIN = 5
 SLIDER_MAX_MIN = 12 * 60
+
+
+class TimePickerPopup(QFrame):
+    """Click-to-pick popup: hour grid (0-23) then minute grid (5-min steps)."""
+
+    _BTN = ("QPushButton { background-color: #313244; padding: 5px 0; min-width: 30px; }"
+            "QPushButton:hover { background-color: #585b70; }"
+            "QPushButton:checked { background-color: #89b4fa; color: #1e1e2e; font-weight: bold; }")
+
+    def __init__(self, time_edit: QTimeEdit, parent=None):
+        super().__init__(parent, Qt.Popup)
+        self.time_edit = time_edit
+        self.setStyleSheet("QFrame { background-color: #1e1e2e; border: 1px solid #45475a; }"
+                           "QLabel { border: none; color: #a6adc8; }")
+        lay = QVBoxLayout(self)
+        lay.addWidget(QLabel("Saat"))
+        self.hour_btns = self._grid(lay, range(24), 6, lambda v: f"{v:02d}", self._pick_hour)
+        lay.addWidget(QLabel("Dakika"))
+        self.min_btns = self._grid(lay, range(0, 60, 5), 6, lambda v: f"{v:02d}", self._pick_minute)
+
+    def _grid(self, lay, values, cols, fmt, slot):
+        grid = QGridLayout()
+        grid.setSpacing(3)
+        btns = {}
+        for i, v in enumerate(values):
+            b = QPushButton(fmt(v))
+            b.setCheckable(True)
+            b.setStyleSheet(self._BTN)
+            b.clicked.connect(lambda _=False, v=v: slot(v))
+            grid.addWidget(b, i // cols, i % cols)
+            btns[v] = b
+        lay.addLayout(grid)
+        return btns
+
+    def popup_at(self, widget):
+        t = self.time_edit.time()
+        for h, b in self.hour_btns.items():
+            b.setChecked(h == t.hour())
+        for m, b in self.min_btns.items():
+            b.setChecked(m == t.minute())
+        self.move(widget.mapToGlobal(widget.rect().bottomLeft()))
+        self.show()
+
+    def _pick_hour(self, h):
+        t = self.time_edit.time()
+        self.time_edit.setTime(QTime(h, t.minute()))
+        for k, b in self.hour_btns.items():
+            b.setChecked(k == h)
+
+    def _pick_minute(self, m):
+        t = self.time_edit.time()
+        self.time_edit.setTime(QTime(t.hour(), m))
+        self.close()
 
 
 class ManualSessionDialog(QDialog):
@@ -68,8 +122,21 @@ class ManualSessionDialog(QDialog):
         self.end_edit = QTimeEdit(now)
         for e in (self.start_edit, self.end_edit):
             e.setDisplayFormat("HH:mm")
-        form.addRow("Başlangıç:", self.start_edit)
-        form.addRow("Bitiş:", self.end_edit)
+        form.addRow("Başlangıç:", self._time_row(self.start_edit))
+        form.addRow("Bitiş:", self._time_row(self.end_edit))
+
+        quick = QHBoxLayout()
+        quick.setSpacing(4)
+        for label, mins in (("30dk", 30), ("1s", 60), ("1.5s", 90), ("2s", 120), ("3s", 180)):
+            b = QPushButton(label)
+            b.setToolTip(f"Bitişi başlangıçtan {label} sonrasına ayarla")
+            b.clicked.connect(lambda _=False, m=mins: self._apply_duration(m))
+            quick.addWidget(b)
+        now_btn = QPushButton("Şimdi")
+        now_btn.setToolTip("Bitişi şu an yap")
+        now_btn.clicked.connect(lambda: self.end_edit.setTime(QTime.currentTime()))
+        quick.addWidget(now_btn)
+        form.addRow("Hızlı:", quick)
 
         # --- Detailed-only section ---
         self.detail_box = QWidget()
@@ -123,6 +190,31 @@ class ManualSessionDialog(QDialog):
 
         self._set_mode(False)
         self._on_times_changed()
+
+    def _time_row(self, edit: QTimeEdit) -> QWidget:
+        row = QWidget()
+        h = QHBoxLayout(row)
+        h.setContentsMargins(0, 0, 0, 0)
+        btn = QToolButton()
+        btn.setText("🕒")
+        btn.setToolTip("Saati tıklayarak seç")
+        btn.setStyleSheet("QToolButton { background-color: #313244; border: 1px solid #45475a;"
+                          " border-radius: 4px; padding: 3px 6px; }"
+                          "QToolButton:hover { background-color: #45475a; }")
+        popup = TimePickerPopup(edit, self)
+        btn.clicked.connect(lambda: popup.popup_at(btn))
+        h.addWidget(edit, 1)
+        h.addWidget(btn)
+        return row
+
+    def _apply_duration(self, mins: int):
+        start = self.start_edit.time()
+        start_min = start.hour() * 60 + start.minute()
+        if start_min + mins > 24 * 60 - 1:
+            start_min = 24 * 60 - 1 - mins
+            self.start_edit.setTime(QTime(start_min // 60, start_min % 60))
+        end_min = start_min + mins
+        self.end_edit.setTime(QTime(end_min // 60, end_min % 60))
 
     # ------------------------------------------------------------------
     # Mode handling
