@@ -300,6 +300,7 @@ class TaskWindow(QDialog):
         self.task_tree.setCurrentItem(item)
         self.on_task_selected(item, column)
         self.set_active_task()
+        self.close()
 
     def set_active_task(self):
         """Seçili task'ı aktif yap."""
