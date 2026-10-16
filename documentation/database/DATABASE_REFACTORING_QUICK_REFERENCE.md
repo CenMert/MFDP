@@ -1,5 +1,9 @@
 # Database Refactoring - Quick Reference
 
+> **Tarihsel doküman.** Repository refactoring'inin anlık kaydıdır. O tarihten beri `CalendarRepository`
+> (+ `calendar_events`, `calendar_ranges`) eklendi ve uygulama kodu `db_manager` facade'ı yerine repository'leri
+> doğrudan kullanıyor. Güncel şema ve veri akışı: [`../VERI_HARITASI.md`](../VERI_HARITASI.md).
+
 ## What Changed?
 
 ### Before

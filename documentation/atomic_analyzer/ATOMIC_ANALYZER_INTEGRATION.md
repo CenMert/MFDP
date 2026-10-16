@@ -1,5 +1,15 @@
 # AtomicAnalyzer Integration Guide
 
+> **Durum notu (2026-10-16):** Bu doküman AtomicAnalyzer ilk yazıldığında hazırlandı; örneklerdeki
+> `db_manager` çağrıları ve `SystemMonitor` / `DNDManager` entegrasyonu planlanan haldir.
+> **Gerçekte bağlı olanlar:** timer'dan `session_started`, `session_resumed`, `interruption_detected`
+> (yalnızca `user_pause`), `milestone_reached` (yalnızca Focus, %25/50/75), `session_completed`,
+> `session_abandoned` (`reset` / `mode_change` / `app_exit`); `MainWindow`'dan `dnd_toggled`.
+> **Bağlı olmayanlar:** `focus_shift_detected` (SystemMonitor hiçbir yerde oluşturulmuyor),
+> `distraction_identified`, `environment_changed`, `break_started`, `break_ended`.
+> `%100` milestone'u kaydedilmez (tamamlanma `session_completed` ile işaretlenir). Olaylar yalnızca oturum
+> DB'ye yazılırken flush edilir. Güncel format ve kullanım: [`../VERI_HARITASI.md`](../VERI_HARITASI.md).
+
 This document explains how to integrate `AtomicAnalyzer` with your existing MFDP codebase.
 
 ## Database Setup ✅

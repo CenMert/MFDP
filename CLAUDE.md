@@ -24,14 +24,16 @@ MFDP is a Pomodoro/focus-tracking desktop app for Linux (KDE recommended). The c
 - `atomic_analyzer.py` — Event sourcing engine. Records `AtomicEvent` instances (interruptions, focus shifts, DND toggles, milestones) with elapsed-time offsets. Designed for future ML analysis.
 - `task_manager.py` / `recursive_task_manager.py` — Flat and tree-structured task CRUD. The recursive manager auto-completes parents when all children are done.
 - `dnd_manager.py` — KDE D-Bus DND integration (enable/disable system notifications).
-- `system_monitor.py` — Active window detection via KDE D-Bus, used by `AtomicAnalyzer` for focus-shift events.
+- `system_monitor.py` — Active window detection via KDE D-Bus. Intended to feed `AtomicAnalyzer.record_focus_shift`, but not instantiated anywhere yet.
 - `notifier.py` — Qt sound effects for session start/pause/complete and hourly gong.
 
 ### `db/` — Data access layer
 - `base_repository.py` — Thread-safe `ConnectionPool` (SQLite). All repos inherit from `BaseRepository`. Call `BaseRepository.initialize_pool(pool_size=5)` once at startup.
 - `database_initializer.py` — Idempotent schema setup + migrations. Call `DatabaseInitializer.setup_database()` once at startup.
 - `db_manager.py` — Backward-compatibility facade that re-exports all repository methods through a single import.
-- Specialized repos: `session_repository.py`, `atomic_event_repository.py`, `task_repository.py`, `tag_repository.py`, `settings_repository.py`.
+- Specialized repos: `session_repository.py`, `atomic_event_repository.py`, `task_repository.py`, `tag_repository.py`, `settings_repository.py`, `calendar_repository.py`. App code calls these directly; `db_manager.py` is unused legacy.
+- Foreign keys are not enforced (no `PRAGMA foreign_keys = ON`), so `ON DELETE CASCADE` in the schema does nothing.
+- Full data map (every table/column/format, file-based state, who reads/writes what): `documentation/VERI_HARITASI.md` — update it when the schema or event types change.
 - Database file: `focus_tracker.db` (created at project root on first run). Test/seed databases live in `MyDataBases/`.
 
 ### `ui/` — PySide6 windows and dialogs

@@ -1,5 +1,10 @@
 # Database Architecture Diagram
 
+> **Durum notu (2026-10-16):** Bu diyagram refactoring sırasında yazıldı. Sonradan eklenenler:
+> `CalendarRepository` + `calendar_events` / `calendar_ranges` tabloları. Uygulama kodu artık
+> `db_manager.py` facade'ını kullanmıyor, repository'leri doğrudan çağırıyor. Kolon formatları,
+> event türleri ve kimin neyi okuyup yazdığı için güncel kaynak: [`../VERI_HARITASI.md`](../VERI_HARITASI.md).
+
 ## Inheritance Hierarchy
 
 ```
@@ -23,6 +28,7 @@
    └───────────┘    └──────────┘  │ory    │  │Reposit │  └────────────┘
                                     └───────┘  │ory    │
                                                └───────┘
+   + CalendarRepository (calendar_events, calendar_ranges)
 ```
 
 ---
@@ -82,6 +88,7 @@
                   │ • tags         │
                   │ • atomic_event │
                   │ • s            │
+                  │ • calendar_*   │
                   └────────────────┘
 ```
 
@@ -197,7 +204,7 @@ Running Application
 ### SettingsRepository
 - **Single Responsibility**: Application configuration storage
 - **Methods**: save_setting, get_setting, load_settings, delete_setting
-- **Use**: Theme, sound settings, preferences
+- **Use**: Keys `focus_duration`, `short_break_duration`, `long_break_duration` (minutes), `sound_volume` (0-100); all stored as TEXT
 
 ### SessionRepository
 - **Single Responsibility**: Focus/timer session logging and analytics
@@ -219,10 +226,16 @@ Running Application
 - **Methods**: insert_events, get_events, get_heatmap
 - **Filters**: get_interruption_events, get_focus_shift_events, get_distraction_events
 
+### CalendarRepository
+- **Single Responsibility**: Calendar events (exam/homework/meeting) and multi-day ranges
+- **Methods**: get_events_between, add_event, delete_event, get_ranges_overlapping, add_range, delete_range
+- **Use**: Only `ui/calendar_window.py`; dates are `YYYY-MM-DD` strings
+
 ### db_manager (Facade)
 - **Single Responsibility**: Backward compatibility and delegation
 - **Methods**: 30+ functions that forward to appropriate repositories
 - **Purpose**: Zero-breaking-change refactoring
+- **Status**: No longer imported by app code (core/ui call repositories directly); does not cover CalendarRepository
 
 ---
 
@@ -235,11 +248,11 @@ settings
 
 sessions_v2
 ├── id (INTEGER, PRIMARY KEY)
-├── start_time (TEXT)
+├── start_time (TEXT, 'YYYY-MM-DD HH:MM:SS' local time)
 ├── end_time (TEXT)
 ├── duration_seconds (INTEGER)
 ├── planned_duration_minutes (INTEGER)
-├── mode (TEXT) ─────► 'Focus' or 'Free Timer'
+├── mode (TEXT) ─────► 'Focus', 'Short Break', 'Long Break', 'Free Timer'
 ├── completed (BOOLEAN)
 ├── task_name (TEXT)
 ├── category (TEXT)
@@ -249,10 +262,10 @@ sessions_v2
 tasks
 ├── id (INTEGER, PRIMARY KEY)
 ├── name (TEXT, UNIQUE)
-├── tag (TEXT) ───► FK to tags.name
+├── tag (TEXT) ───► matches tags.name (no FK constraint)
 ├── planned_duration_minutes (INTEGER)
 ├── created_at (TEXT)
-├── is_active (BOOLEAN)
+├── is_active (BOOLEAN) ─► 0 = soft-deleted
 ├── color (TEXT)
 ├── parent_id (INTEGER) ─► Self-join for hierarchy
 ├── is_completed (BOOLEAN)
@@ -267,16 +280,29 @@ atomic_events
 ├── id (INTEGER, PRIMARY KEY)
 ├── session_id (INTEGER, FK) ───► sessions_v2.id
 ├── event_type (TEXT)
-│   ├── 'interruption_detected'
-│   ├── 'focus_shift_detected'
-│   ├── 'distraction_identified'
-│   └── ...
-├── timestamp (TEXT, ISO8601)
-├── elapsed_seconds (INTEGER)
+│   ├── written today: session_started, session_resumed, interruption_detected,
+│   │   milestone_reached, session_completed, session_abandoned, dnd_toggled
+│   └── defined but not wired: focus_shift_detected, distraction_identified,
+│       environment_changed, break_started, break_ended
+├── timestamp (TEXT, ISO8601 with 'T' + microseconds, local time)
+├── elapsed_seconds (INTEGER, wall-clock since session start)
 ├── metadata (TEXT, JSON)
-├── created_at (TEXT)
-└── Indices: session_id, event_type, timestamp
+├── created_at (TEXT, CURRENT_TIMESTAMP = UTC)
+└── Indices: session_id, event_type, timestamp, elapsed_seconds
+
+calendar_events
+├── id, title, date ('YYYY-MM-DD'), time ('HH:MM' or NULL)
+├── kind ('sinav' | 'odev' | 'toplanti' | 'diger'), note, created_at
+└── Index: date
+
+calendar_ranges
+├── id, label, start_date, end_date ('YYYY-MM-DD'), color ('#rrggbb'), created_at
+└── Index: (start_date, end_date)
 ```
+
+> ⚠️ **Foreign keys are not enforced.** No connection runs `PRAGMA foreign_keys = ON`, so the
+> `ON DELETE CASCADE` clauses (atomic_events → sessions_v2, tasks.parent_id → tasks) have no effect.
+> Deleting a session leaves its atomic events behind unless they are deleted explicitly.
 
 ---
 

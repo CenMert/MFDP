@@ -1,5 +1,9 @@
 # Database Refactoring - Documentation Index
 
+> **Tarihsel doküman.** Repository refactoring'inin anlık kaydıdır. O tarihten beri `CalendarRepository`
+> (+ `calendar_events`, `calendar_ranges`) eklendi ve uygulama kodu `db_manager` facade'ı yerine repository'leri
+> doğrudan kullanıyor. Güncel şema ve veri akışı: [`../VERI_HARITASI.md`](../VERI_HARITASI.md).
+
 ## 📚 Complete Documentation Set
 
 ### 1. **DATABASE_REFACTORING_COMPLETE.md** (Comprehensive)

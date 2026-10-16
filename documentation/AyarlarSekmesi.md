@@ -1,5 +1,9 @@
 Yeni bir ayarlar sekmesi tasarlanacak.
 
+> **Durum (2026-10-16):** Ses seviyesi kaydırıcısı eklendi (`sound_volume`, 0–100, `settings` tablosunda).
+> Süreler (`focus_duration`, `short_break_duration`, `long_break_duration`) ayarlanabiliyor.
+> Sol taraftaki sekme/gezinme paneli henüz yok — `SettingsDialog` hâlâ tek sayfalık bir form.
+
 * sürelerin ayarlandığı ayrı bir bölüm oluşturulmalı.
 * ses yüksekliğinin değiştirilebileceği bir ayrı bölme olmalı.
 

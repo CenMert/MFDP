@@ -28,7 +28,7 @@ Temel Prensipler:
 Uygulama, Modüler Monolitik bir yapıda tasarlanmış olup, MVC (Model-View-Controller) desenine benzer bir ayrım kullanır.
 A. Core Layer (Controller/Logic)
 
-Uygulamanın kalbi PomodoroTimer sınıfıdır. Bu sınıf bir State Machine (Durum Makinesi) gibi davranır.
+Uygulamanın kalbi core/timer.py içindeki PmdrCountdownTimer (Pomodoro) ve CountUpTimer (Free Timer) sınıflarıdır; FocusSession dataclass'ı oturumun çalışma zamanı verisini tutar. (Eski PomodoroTimer sınıfı yalnızca geriye uyumluluk için duruyor.) Pomodoro timer bir State Machine (Durum Makinesi) gibi davranır.
 
     States: Focus, Short Break, Long Break, Idle.
 
@@ -36,11 +36,13 @@ Uygulamanın kalbi PomodoroTimer sınıfıdır. Bu sınıf bir State Machine (Du
 
 B. Data Layer (Model)
 
-Veritabanı işlemleri db_manager.py modülünde izole edilmiştir.
+Veritabanı işlemleri mfdp_app/db/ altındaki repository sınıflarında izole edilmiştir (SessionRepository, AtomicEventRepository, TaskRepository, TagRepository, SettingsRepository, CalendarRepository). db_manager.py yalnızca geriye uyumluluk facade'ı olarak duruyor; uygulama kodu artık doğrudan repository'leri çağırıyor.
 
-    Abstraction: UI katmanı asla SQL sorgusu bilmez. Sadece log_session() veya get_daily_trend() gibi fonksiyonları çağırır.
+    Abstraction: UI katmanı asla SQL sorgusu bilmez. Sadece SessionRepository.log_session() veya get_daily_trend() gibi metotları çağırır.
 
-    Connection Management: Her işlem için güvenli bağlantı açılıp kapatılır (Context management), böylece "Database Locked" hataları önlenir.
+    Connection Management: BaseRepository içindeki thread-safe ConnectionPool (5 bağlantı) bağlantıları yeniden kullanır; her işlem sonunda bağlantı havuza iade edilir.
+
+    Tüm tabloların, kolonların, formatların ve kimin hangi veriyi okuyup yazdığının güncel listesi: documentation/VERI_HARITASI.md
 
 C. UI Layer (View)
 
@@ -58,12 +60,17 @@ Sorun (V1 Yaklaşımı):
 
 Veriler "özet" olarak değil, "gerçekleşen olay" olarak saklanmaya başlandı. sessions_v2 tablosu şu yapıda tasarlandı:
 Alan Adı	Tip	Açıklama
-start_time	TIMESTAMP	Oturumun tam başlama anı (ISO8601).
-duration_seconds	INTEGER	Gerçekleşen süre.
-planned_duration	INTEGER	Kullanıcının hedeflediği süre.
-task_name	TEXT	Görev bağlamı (Context).
-interruption_count	INTEGER	Oturum sırasında kaç kez duraklatıldığı.
+start_time	TEXT	Oturumun başlama anı, yerel saat, 'YYYY-MM-DD HH:MM:SS'.
+end_time	TEXT	Oturumun bitiş anı (aynı format).
+duration_seconds	INTEGER	Gerçekleşen net süre (duraklatmalar hariç).
+planned_duration_minutes	INTEGER	Kullanıcının hedeflediği süre (Free Timer / manuel girişte NULL).
+mode	TEXT	Focus, Short Break, Long Break veya Free Timer.
+task_name	TEXT	Görev bağlamı (görevin adı).
+category	TEXT	Görevin etiketi (tag).
+interruption_count	INTEGER	Oturum sırasında kaç kez duraklatıldığı (+ reset / mod değişimi / kapanış).
 completed	BOOLEAN	Başarıyla bitti mi, yarıda mı kesildi?
+
+V2 ile birlikte oturum içi ayrıntılar ayrıca atomic_events tablosunda ham olay akışı olarak tutulur (oturum başlangıcı, duraklama/devam, %25-50-75 milestone, tamamlanma/terk, DND). Ayrıca tasks, tags, settings, calendar_events ve calendar_ranges tabloları vardır.
 
 Kazanım: Bu ham veri yapısı sayesinde, veritabanını değiştirmeden geriye dönük olarak "Hangi saatte verimliyim?", "Hangi görevde çok bölünüyorum?" gibi sorulara SQL sorgularıyla cevap verilebilir hale gelindi.
 5. İstatistik ve Veri Analitiği Motoru
@@ -103,10 +110,14 @@ Mühendislik Kazanımları:
 
     Platform bağımsız (Linux/Windows/Mac uyumlu) çekirdek yapı.
 
-Gelecek Hedefleri (Roadmap):
+Gelecek Hedefleri (Roadmap) — durum 2026-10-16:
 
-    Görev (Task) bazlı detaylı raporlama.
+    Görev (Task) bazlı detaylı raporlama. → Kısmen var: "Gün" paneli ve blok raporu (core/daily_report.py) tag + görev bazında blokları gösteriyor.
 
-    CSV/JSON formatında veri dışa aktarma (Data Export).
+    CSV/JSON formatında veri dışa aktarma (Data Export). → Yalnızca takvim için JSON dışa/içe aktarma var; oturum/olay verisi için henüz yok.
 
-    Pomodoro tekniğine ek olarak Flowtime tekniğinin eklenmesi.
+    Pomodoro tekniğine ek olarak Flowtime tekniğinin eklenmesi. → Free Timer (CountUpTimer) modu eklendi.
+
+    Hedef (Goal) sistemi. → Tasarlandı (documentation/HedefSistemi.md), henüz uygulanmadı.
+
+    Aktif pencere takibi (focus shift). → AtomicAnalyzer API'si ve SystemMonitor var, ancak birbirine bağlı değil; veri toplanmıyor.

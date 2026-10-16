@@ -1,5 +1,11 @@
 # Hedef (Goal) Sistemi — Tasarım Planı
 
+> **Durum (2026-10-16): Uygulanmadı.** `goals` / `goal_tasks` tabloları, `GoalRepository`, `GoalManager`
+> ve `pomodoro_completed_signal` henüz kodda yok. Uygulanırken not: `sessions_v2` görevi `task_id` ile değil
+> `task_name` ile tuttuğu için hedef ilerlemesi oturum geçmişinden geriye dönük hesaplanmak istenirse ada göre
+> eşleşme gerekir; ayrıca SQLite'ta `PRAGMA foreign_keys` açılmadığı için `ON DELETE CASCADE` çalışmaz
+> (bkz. `VERI_HARITASI.md` §6).
+
 ## Amaç
 
 Task sekmesine bir "orkestratör" katmanı ekleniyor. Kullanıcı, mevcut task'ları ve planlanan pomodoro sayılarını bir Hedef altında toplayabiliyor. Timer bir pomodoro tamamladığında, o task hangi hedeflere bağlıysa ilerleme otomatik güncelleniyor. İlerleme %100'ü geçebilir (4/3 = %133). Manuel tamamlama da mevcut.

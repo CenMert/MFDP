@@ -1,5 +1,9 @@
 # Database Refactoring Implementation Complete
 
+> **Tarihsel doküman.** Repository refactoring'inin anlık kaydıdır. O tarihten beri `CalendarRepository`
+> (+ `calendar_events`, `calendar_ranges`) eklendi ve uygulama kodu `db_manager` facade'ı yerine repository'leri
+> doğrudan kullanıyor. Güncel şema ve veri akışı: [`../VERI_HARITASI.md`](../VERI_HARITASI.md).
+
 ## Overview
 Successfully refactored the monolithic `db_manager.py` into a clean, modular architecture with:
 - **7 specialized repository classes** (1,000+ lines split into focused modules)

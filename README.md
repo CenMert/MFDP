@@ -26,15 +26,14 @@ MFDP is a local-first, data-driven Pomodoro focus assistant for Linux. It goes b
 
 Each session is instrumented at a granular level through the `AtomicAnalyzer`:
 
-- Records interruptions with a severity classification (minor / moderate / severe).
-- Detects and logs focus shifts by reading the active window via KDE D-Bus.
-- Captures distraction events, DND toggle actions, environment changes, and session milestones.
-- All events are persisted to the database with elapsed-time offsets for replay and analysis.
+- Records session start/resume/complete/abandon, every pause (as an interruption), DND toggles, and 25/50/75% milestones of a Focus session.
+- The event model also defines focus shifts (active-window changes), distractions, environment changes and breaks; these are not wired up yet.
+- All events are persisted to the database with elapsed-time offsets and JSON metadata for replay and analysis.
+- Full data map (tables, formats, who reads/writes what): [`documentation/VERI_HARITASI.md`](documentation/VERI_HARITASI.md).
 
 ### Do Not Disturb Integration
 
-- Automatically enables system DND at session start and restores it when the session ends.
-- Manual override toggle available directly in the main window.
+- Toggle system DND with the 🔕 button or Ctrl+D; the inhibition is released when MFDP exits.
 - Integrates with KDE's notification system via D-Bus.
 
 ### Statistics

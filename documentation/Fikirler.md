@@ -8,7 +8,7 @@
 
 ### Değişiklikler
 
-[] Ayarlar sekmesi değişmeli 
+[~] Ayarlar sekmesi değişmeli *(ses ayarı eklendi, sol gezinme paneli yok — bkz. AyarlarSekmesi.md)* 
 [] Task sekmesi görevi ve yapısı birazcı kdeğişecek.
 [] 
 [] 
@@ -18,4 +18,4 @@
 
 
 ### Hatalar
-[] bir sekmeyi açıp kapadığın zaman onu tekrardan açamıyorsun. Arkada bir yerde muhtemelen açık kalmaya falan devam ediyor ya da işaretçisini mi kaybediyor bilemedim. Task sekmesini bir açıp kapadığında geri açamıyorsun.
+[x] *(Kodda düzeltilmiş görünüyor: `MainWindow._window_alive()` silinmiş pencereyi algılayıp yenisini açıyor — 98ea3e3. Elle doğrulanmalı.)* bir sekmeyi açıp kapadığın zaman onu tekrardan açamıyorsun. Arkada bir yerde muhtemelen açık kalmaya falan devam ediyor ya da işaretçisini mi kaybediyor bilemedim. Task sekmesini bir açıp kapadığında geri açamıyorsun.
