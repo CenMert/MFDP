@@ -9,6 +9,10 @@ Kullanıcının günlük ek girişi yok:
   önceki güne çeker ve sınava 14 gün kala hiç çalışılmamış / bir haftadır dokunulmamış
   konuları kuyruğa getirir.
 
+Hatırlatma OPT-IN'dir: yalnızca "tekrar takibi" açılmış derslerde (ana görev) çalışır. Plansız, boşluk
+buldukça yapılan işler (ör. bitirme projesi) takipte değilse hiçbir etiket, sınav bağı ya da kuyruk girdisi
+hatırlatma üretmez. Takip, ders günü bir konu girilince ya da Takip edilen dersler penceresinden açılır.
+
 Sürdürülebilirlik: kuyruk günde en fazla MAX_QUEUE konu gösterir; gecikmiş konular birikip
 borç olmaz (yalnızca sınav yakınlığına göre yeniden sıralanır). Kaçırılan gün ceza sayılmaz;
 `lapses` yalnızca kötü hatırlama cevabıyla artar.
@@ -90,6 +94,13 @@ def _topics_of(course) -> List:
     return leaves or ([] if course.is_completed else [course])
 
 
+def is_task_tracked(task_name: Optional[str]) -> bool:
+    """Görev (ya da bağlı olduğu ders) tekrar takibinde mi?"""
+    task_id = ReviewRepository.task_id_by_name(task_name)
+    task = TaskRepository.get_task_by_id(task_id) if task_id else None
+    return bool(task) and _root(task).id in ReviewRepository.get_tracked_course_ids()
+
+
 def _next_due(step: int, day: datetime.date) -> str:
     return (day + datetime.timedelta(days=INTERVALS[min(step, len(INTERVALS) - 1)])).isoformat()
 
@@ -116,6 +127,7 @@ def add_lecture_topics(course_id: int, day: datetime.date, titles: List[str]) ->
     course = TaskRepository.get_task_by_id(course_id)
     if not course:
         return [], list(titles)
+    ReviewRepository.set_course_tracked(course.id, True)  # konu girmek = hatırlatma isteği
     created, skipped, seen = [], [], set()
     for raw in titles:
         title = " ".join(raw.split())
@@ -153,7 +165,7 @@ def on_session_kind(task_name: Optional[str], kind: str, today: Optional[datetim
     Returns: konunun task_id'si (görevsiz oturumda None).
     """
     task_id = ReviewRepository.task_id_by_name(task_name)
-    if not task_id:
+    if not task_id or not is_task_tracked(task_name):
         return None
     today = today or logical_day(datetime.datetime.now())
     if kind in START_KINDS:
@@ -168,7 +180,7 @@ def apply_recall(task_name: Optional[str], session_id: int, recall: int,
     önceki cevabın etkisi geri alınıp yenisi uygulanır.
     """
     task_id = ReviewRepository.task_id_by_name(task_name)
-    if not task_id:
+    if not task_id or not is_task_tracked(task_name):
         return False
     today = today or logical_day(datetime.datetime.now())
 
@@ -209,7 +221,8 @@ def effective_due(state: Dict, exam_date: Optional[datetime.date], today: dateti
 def build_queue(today: Optional[datetime.date] = None, limit: Optional[int] = MAX_QUEUE) -> List[ReviewItem]:
     """Bugünün tekrar kuyruğu: sınava en yakın önce, sonra çok unutulan, sonra tarihi eski olan."""
     today = today or logical_day(datetime.datetime.now())
-    exams = _upcoming_exam_by_course(today)
+    tracked = ReviewRepository.get_tracked_course_ids()
+    exams = {cid: ex for cid, ex in _upcoming_exam_by_course(today).items() if cid in tracked}
     items: Dict[int, ReviewItem] = {}
 
     def days_to_exam(course_id):
@@ -222,6 +235,8 @@ def build_queue(today: Optional[datetime.date] = None, limit: Optional[int] = MA
         if not task or not task.is_active or task.is_completed:
             continue
         course = _root(task)
+        if course.id not in tracked:
+            continue
         ex = exams.get(course.id)
         due, by_exam = effective_due(state, _d(ex['date']) if ex else None, today)
         if due <= today:

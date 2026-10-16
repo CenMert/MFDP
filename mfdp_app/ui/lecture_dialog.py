@@ -96,7 +96,7 @@ class LectureDialog(QDialog):
             return
         created, skipped = review_scheduler.add_lecture_topics(course_id, self._day(), titles)
         self.topics_edit.clear()
-        msg = f"{len(created)} konu kaydedildi."
+        msg = f"{len(created)} konu kaydedildi (ders tekrar takibine alındı)."
         if skipped:
             msg += f" Kaydedilemeyen: {', '.join(skipped)}"
         self.lbl_status.setText(msg)

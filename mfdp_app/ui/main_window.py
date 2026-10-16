@@ -25,6 +25,7 @@ from mfdp_app.db.session_repository import SessionRepository
 from mfdp_app.ui.side_panel import SidePanel, plan_sentence
 from mfdp_app.ui.plans_dialog import PlansDialog
 from mfdp_app.ui.lecture_dialog import LectureDialog
+from mfdp_app.ui.tracking_dialog import TrackingDialog
 from mfdp_app.ui.feedback_strip import FeedbackStrip
 
 class MainWindow(QMainWindow):
@@ -119,6 +120,7 @@ class MainWindow(QMainWindow):
         self.side_panel.edit_plans_requested.connect(self.open_plans)
         self.side_panel.review_start_requested.connect(self.start_task_session)
         self.side_panel.lecture_requested.connect(self.open_lecture_dialog)
+        self.side_panel.tracking_requested.connect(self.open_tracking_dialog)
         outer_layout.addWidget(self.side_panel)
 
         content = QWidget()
@@ -715,6 +717,12 @@ class MainWindow(QMainWindow):
         dialog.exec()
         self.side_panel.refresh()
 
+    def open_tracking_dialog(self):
+        dialog = TrackingDialog(self)
+        dialog.tracking_changed.connect(self.side_panel.refresh)
+        dialog.exec()
+        self.side_panel.refresh()
+
     def open_plans(self):
         dialog = PlansDialog(self)
         dialog.plans_changed.connect(self.side_panel.refresh)
@@ -729,6 +737,7 @@ class MainWindow(QMainWindow):
         session = SessionRepository.get_session(session_id)
         if session and session['mode'] in WORK_MODES:
             self.feedback_strip.open_for_session()
+            self.feedback_strip.recall_allowed = review_scheduler.is_task_tracked(session['task_name'])
             QTimer.singleShot(0, lambda: self.resize(self.width(), self.sizeHint().height()))
         if self.side_panel.isVisible():
             self.side_panel.refresh()

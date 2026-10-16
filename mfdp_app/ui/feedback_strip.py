@@ -42,6 +42,8 @@ class FeedbackStrip(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("FeedbackStrip")
+        # Takipte olmayan işte (tekrar hatırlatması istenmeyen ders) hatırlama sorusu sorulmaz
+        self.recall_allowed = True
         outer = QVBoxLayout(self)
         outer.setContentsMargins(10, 6, 6, 6)
         outer.setSpacing(4)
@@ -110,7 +112,8 @@ class FeedbackStrip(QFrame):
         self.recall_group.idClicked.connect(self.recall_selected.emit)
         outer.addWidget(self.recall_row)
         self.recall_row.hide()
-        self.kind_group.idClicked.connect(lambda i: self.recall_row.setVisible(self._kind_keys[i] == "tekrar"))
+        self.kind_group.idClicked.connect(
+            lambda i: self.recall_row.setVisible(self.recall_allowed and self._kind_keys[i] == "tekrar"))
 
         self.hide()
 

@@ -208,6 +208,11 @@ class DatabaseInitializer:
             );
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_review_log_session ON review_log (session_id);")
+            # Migration: ders düzeyinde tekrar takibi anahtarı (varsayılan kapalı: hatırlatma opt-in)
+            try:
+                cursor.execute("ALTER TABLE tasks ADD COLUMN review_enabled INTEGER DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
             # Migration: konunun ilk karşılaşma günü (derste işlendiği gün) ve kaynağı
             for column in ("learned_on TEXT", "source TEXT"):
                 try:

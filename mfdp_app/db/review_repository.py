@@ -95,6 +95,21 @@ class ReviewRepository(BaseRepository):
             "SELECT COUNT(*) AS n FROM review_log WHERE day = ?", (day,), fetch_one=True)
         return row['n'] if row else 0
 
+    # ---- ders düzeyinde takip anahtarı ----------------------------------
+    @staticmethod
+    def set_course_tracked(task_id: int, tracked: bool) -> bool:
+        """Dersi (ana görev) tekrar takibine al / çıkar. Kapalıyken hiçbir hatırlatma üretilmez."""
+        return BaseRepository.execute_query(
+            "UPDATE tasks SET review_enabled = ? WHERE id = ?", (1 if tracked else 0, task_id), commit=True
+        ) is not None
+
+    @staticmethod
+    def get_tracked_course_ids() -> set:
+        rows = BaseRepository.execute_query(
+            "SELECT id FROM tasks WHERE parent_id IS NULL AND is_active = 1 AND review_enabled = 1",
+            fetch_all=True)
+        return {r['id'] for r in rows} if rows else set()
+
     # ---- yardımcı sorgular --------------------------------------------
     @staticmethod
     def task_id_by_name(name: Optional[str]) -> Optional[int]:

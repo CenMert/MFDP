@@ -219,6 +219,11 @@ Yazan: `core/plan_scheduler.py` (saati gelince sorar, 60 dk pencere) + `ui/main_
 Okuyan: `ui/side_panel.py` (bugünün planları, 28 günlük uyum). Kayıt düşmeyen geçmiş saatli plan = **kaçırıldı**
 (uygulama kapalıydı); bugün henüz cevaplanmamış plan sayılmaz.
 
+**Tekrar takibi opt-in'dir** (`tasks.review_enabled`, yalnızca ana görev/ders için anlamlı, varsayılan `0`): kapalı derste
+(ör. plansız, boşluk buldukça yapılan bitirme çalışması) hiçbir oturum etiketi, sınav bağı ya da kuyruk girdisi hatırlatma üretmez;
+hatırlama sorusu da sorulmaz. Ders günü konu girmek dersi otomatik takibe alır; kalan dersler sol panelde **Hangi dersler takipte?**
+penceresinden (`ui/tracking_dialog.py`) işaretlenir. Takipten çıkarmak durumu silmez, yalnızca yok sayar.
+
 ### 3.10 `review_state` — Konu başına aralıklı tekrar durumu
 
 Konu = görev (alt görev varsa yaprak görevler, yoksa dersin kendisi). Tekrar takvimi 1 → 3 → 7 → 14 → 30 gün.

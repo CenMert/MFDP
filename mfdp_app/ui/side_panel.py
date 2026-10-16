@@ -55,6 +55,7 @@ class SidePanel(QFrame):
     edit_plans_requested = Signal()
     review_start_requested = Signal(int)
     lecture_requested = Signal()
+    tracking_requested = Signal()
 
     WIDTH = 330
 
@@ -119,7 +120,12 @@ class SidePanel(QFrame):
         btn_lecture.setCursor(Qt.PointingHandCursor)
         btn_lecture.setToolTip("Derste ne işlendiğini kaydet; tekrar takvimi o günden başlar")
         btn_lecture.clicked.connect(self.lecture_requested.emit)
+        btn_tracking = QPushButton("Hangi dersler takipte?")
+        btn_tracking.setCursor(Qt.PointingHandCursor)
+        btn_tracking.setToolTip("Tekrar hatırlatması istediğin dersleri seç; diğer işler hatırlatma üretmez")
+        btn_tracking.clicked.connect(self.tracking_requested.emit)
         root.addWidget(btn_lecture)
+        root.addWidget(btn_tracking)
 
         self.lbl_review_stats = QLabel()
         self.lbl_review_stats.setObjectName("SideMuted")
@@ -180,8 +186,10 @@ class SidePanel(QFrame):
         queue = review_scheduler.build_queue(today, limit=None)
         shown = queue[:review_scheduler.MAX_QUEUE]
         if not shown:
-            empty = QLabel("Bugün tekrar yok.\nDerste işlediklerini \"+ Derste işlenen\" ile gir ya da "
-                           "bir konuyu \"Okuma\" / \"Soru\" diye etiketle; takvim kendiliğinden başlar.")
+            tracked = ReviewRepository.get_tracked_course_ids()
+            empty = QLabel("Bugün tekrar yok." if tracked else
+                           "Takipte ders yok. Derste işlediklerini \"+ Derste işlenen\" ile gir ya da "
+                           "\"Hangi dersler takipte?\" ile bir ders seç; diğer işler hatırlatma üretmez.")
             empty.setObjectName("SideMuted")
             empty.setWordWrap(True)
             self.reviews_layout.addWidget(empty)
