@@ -208,6 +208,12 @@ class DatabaseInitializer:
             );
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_review_log_session ON review_log (session_id);")
+            # Migration: konunun ilk karşılaşma günü (derste işlendiği gün) ve kaynağı
+            for column in ("learned_on TEXT", "source TEXT"):
+                try:
+                    cursor.execute(f"ALTER TABLE review_state ADD COLUMN {column}")
+                except sqlite3.OperationalError:
+                    pass
 
             conn.commit()
             print("✅ Database V2 schema initialized successfully.")

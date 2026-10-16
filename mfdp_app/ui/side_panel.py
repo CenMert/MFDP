@@ -54,6 +54,7 @@ class ClickLabel(QLabel):
 class SidePanel(QFrame):
     edit_plans_requested = Signal()
     review_start_requested = Signal(int)
+    lecture_requested = Signal()
 
     WIDTH = 330
 
@@ -114,6 +115,12 @@ class SidePanel(QFrame):
         self.reviews_layout.setSpacing(4)
         root.addWidget(self.reviews_box)
 
+        btn_lecture = QPushButton("+ Derste işlenen")
+        btn_lecture.setCursor(Qt.PointingHandCursor)
+        btn_lecture.setToolTip("Derste ne işlendiğini kaydet; tekrar takvimi o günden başlar")
+        btn_lecture.clicked.connect(self.lecture_requested.emit)
+        root.addWidget(btn_lecture)
+
         self.lbl_review_stats = QLabel()
         self.lbl_review_stats.setObjectName("SideMuted")
         self.lbl_review_stats.setWordWrap(True)
@@ -173,19 +180,23 @@ class SidePanel(QFrame):
         queue = review_scheduler.build_queue(today, limit=None)
         shown = queue[:review_scheduler.MAX_QUEUE]
         if not shown:
-            empty = QLabel("Bugün tekrar yok.\nBir konuyu \"Okuma\" / \"Soru\" olarak etiketlersen "
-                           "tekrar takvimi kendiliğinden başlar.")
+            empty = QLabel("Bugün tekrar yok.\nDerste işlediklerini \"+ Derste işlenen\" ile gir ya da "
+                           "bir konuyu \"Okuma\" / \"Soru\" diye etiketle; takvim kendiliğinden başlar.")
             empty.setObjectName("SideMuted")
             empty.setWordWrap(True)
             self.reviews_layout.addWidget(empty)
         for item in shown:
             exam = f" · sınava {item.days_to_exam} gün" if item.days_to_exam is not None else ""
             course = f" <span style='color:#7f849c'>({item.course_name})</span>" \
-                if item.course_name != item.name else ""
+                if item.course_name != item.display_name else ""
             lapse = f" · {item.lapses}× unutuldu" if item.lapses else ""
+            learned = ""
+            if item.learned_on:
+                ago = (today - item.learned_on).days
+                learned = " · derste işlendi " + ("bugün" if ago == 0 else f"{ago} gün önce")
             row = ClickLabel(
-                f"<span style='color:#89b4fa; font-weight:bold'>↻</span>&nbsp; {item.name}{course}<br>"
-                f"<span style='color:#7f849c; font-size:11px'>{item.reason_text}{exam}{lapse}</span>")
+                f"<span style='color:#89b4fa; font-weight:bold'>↻</span>&nbsp; {item.display_name}{course}<br>"
+                f"<span style='color:#7f849c; font-size:11px'>{item.reason_text}{learned}{exam}{lapse}</span>")
             row.setObjectName("SidePlanRow")
             row.setToolTip("Tıkla: bu konuyu aç ve sayacı başlat")
             row.clicked.connect(lambda tid=item.task_id: self.review_start_requested.emit(tid))

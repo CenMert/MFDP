@@ -20,7 +20,7 @@ FSRS'e geçilebilir (research_notes/SM2 ve FSRS/sm2_fsrs.md).
 
 import datetime
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from mfdp_app.core.daily_report import logical_day
 from mfdp_app.db.calendar_repository import CalendarRepository
@@ -52,6 +52,13 @@ class ReviewItem:
     lapses: int = 0
     due: Optional[datetime.date] = None
     idle_days: Optional[int] = None
+    learned_on: Optional[datetime.date] = None   # derste işlendiği gün (varsa)
+
+    @property
+    def display_name(self) -> str:
+        """'Anten · Dipol antenler' -> 'Dipol antenler' (ders adı zaten ayrıca gösterilir)."""
+        prefix = f"{self.course_name} · "
+        return self.name[len(prefix):] if self.name.startswith(prefix) else self.name
 
     @property
     def reason_text(self) -> str:
@@ -92,6 +99,48 @@ def _upcoming_exam_by_course(today: datetime.date) -> Dict[int, Dict]:
     for ex in CalendarRepository.get_upcoming_exams(today.isoformat()):
         exams.setdefault(ex['task_id'], ex)  # tarih sırasıyla geldiği için ilki en yakın
     return exams
+
+
+# ---------------------------------------------------------------------------
+# Derste işlenenler
+# ---------------------------------------------------------------------------
+
+def add_lecture_topics(course_id: int, day: datetime.date, titles: List[str]) -> Tuple[List[int], List[str]]:
+    """
+    Derste işlenen konuları kaydet. Her satır, dersin altında bir alt görev ("Ders · konu") olur ve
+    ders günü ilk karşılaşma sayılır: ilk tekrar ertesi gün, gün geçmişteyse hemen sıraya gelir.
+    Aynı konu yeniden girilirse yenisi açılmaz (var olan konunun durumuna dokunulmaz).
+
+    Returns: (kaydedilen task_id'ler, atlanan/başarısız satırlar)
+    """
+    course = TaskRepository.get_task_by_id(course_id)
+    if not course:
+        return [], list(titles)
+    created, skipped, seen = [], [], set()
+    for raw in titles:
+        title = " ".join(raw.split())
+        if not title or title.lower() in seen:
+            continue
+        seen.add(title.lower())
+        name = f"{course.name} · {title}"
+        task_id = ReviewRepository.task_id_by_name(name) or TaskRepository.insert_task(
+            name, course.tag, None, course.color, parent_id=course.id)
+        if not task_id:
+            skipped.append(title)
+            continue
+        ReviewRepository.create_state(task_id, _next_due(0, day), day.isoformat(),
+                                      learned_on=day.isoformat(), source='ders')
+        created.append(task_id)
+    return created, skipped
+
+
+def recent_lecture_topics(days: int = 14, today: Optional[datetime.date] = None) -> List[Dict]:
+    """Son `days` günde derste işlenen konular (ders adıyla), en yeni önce."""
+    today = today or logical_day(datetime.datetime.now())
+    since = (today - datetime.timedelta(days=days)).isoformat()
+    courses = {c.id: c for c in TaskRepository.get_root_tasks()}
+    rows = ReviewRepository.get_lecture_topics(list(courses), since)
+    return [dict(r, course_name=courses[r['parent_id']].name) for r in rows if r['parent_id'] in courses]
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +228,8 @@ def build_queue(today: Optional[datetime.date] = None, limit: Optional[int] = MA
             items[task.id] = ReviewItem(
                 task_id=task.id, name=task.name, course_name=course.name,
                 days_to_exam=days_to_exam(course.id), reason='exam' if by_exam else 'due',
-                lapses=state['lapses'], due=due)
+                lapses=state['lapses'], due=due,
+                learned_on=_d(state['learned_on']) if state.get('learned_on') else None)
 
     # 2) Sınavı yaklaşan derslerde hiç çalışılmamış / bir haftadır dokunulmamış konular
     for course_id, ex in exams.items():

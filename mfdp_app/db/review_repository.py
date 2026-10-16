@@ -30,14 +30,33 @@ class ReviewRepository(BaseRepository):
         return [dict(r) for r in rows] if rows else []
 
     @staticmethod
-    def create_state(task_id: int, next_due: str, last_review: str) -> bool:
-        """Konu için durum aç (varsa dokunmaz)."""
+    def create_state(task_id: int, next_due: str, last_review: str,
+                     learned_on: Optional[str] = None, source: str = 'calisma') -> bool:
+        """Konu için durum aç (varsa dokunmaz). source: 'ders' (derste işlendi) | 'calisma'."""
         return BaseRepository.execute_query(
-            "INSERT OR IGNORE INTO review_state (task_id, step, next_due, last_review, lapses, created_at) "
-            "VALUES (?, 0, ?, ?, 0, ?)",
-            (task_id, next_due, last_review, datetime.datetime.now().strftime(_TIME_FMT)),
+            "INSERT OR IGNORE INTO review_state "
+            "(task_id, step, next_due, last_review, lapses, created_at, learned_on, source) "
+            "VALUES (?, 0, ?, ?, 0, ?, ?, ?)",
+            (task_id, next_due, last_review, datetime.datetime.now().strftime(_TIME_FMT),
+             learned_on or last_review, source),
             commit=True
         ) is not None
+
+    @staticmethod
+    def get_lecture_topics(course_ids: List[int], since: str) -> List[Dict]:
+        """Derste işlenen konular (en yeni önce): bir dersin alt görevleri, `since` tarihinden itibaren."""
+        if not course_ids:
+            return []
+        marks = ",".join("?" * len(course_ids))
+        rows = BaseRepository.execute_query(
+            f"SELECT t.id, t.name, t.parent_id, r.learned_on FROM review_state r "
+            f"JOIN tasks t ON t.id = r.task_id "
+            f"WHERE r.source = 'ders' AND t.parent_id IN ({marks}) AND r.learned_on >= ? "
+            f"ORDER BY r.learned_on DESC, t.id DESC",
+            tuple(course_ids) + (since,),
+            fetch_all=True
+        )
+        return [dict(r) for r in rows] if rows else []
 
     @staticmethod
     def set_state(task_id: int, step: int, next_due: str, last_review: str, lapses: int) -> bool:

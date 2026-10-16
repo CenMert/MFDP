@@ -231,6 +231,14 @@ Konu = görev (alt görev varsa yaprak görevler, yoksa dersin kendisi). Tekrar 
 | `last_review` | TEXT | `YYYY-MM-DD` son tekrar ya da konunun takvime alındığı gün |
 | `lapses` | INTEGER | yalnızca kötü hatırlama (1–2) cevabıyla artar; kaçırılan gün sayılmaz |
 | `created_at` | TEXT | yerel zaman |
+| `learned_on` | TEXT | `YYYY-MM-DD` konunun ilk karşılaşma günü (derste işlendiği gün; yoksa takvime alındığı gün) |
+| `source` | TEXT | `ders` (Derste işlenen penceresinden) ya da `calisma` (oturum etiketinden) |
+
+**Derste işlenenler** (`ui/lecture_dialog.py`, `core/review_scheduler.add_lecture_topics`): ders + tarih + her satıra bir konu.
+Her konu, dersin altında `"Ders · konu"` adıyla bir **alt görev** olur (`tasks.name` UNIQUE olduğu için ders adı öne eklenir;
+etiket ve renk dersten gelir) ve `review_state`'e `source='ders'`, `learned_on = ders günü`, ilk tekrar ertesi gün olarak yazılır.
+Aynı konu yeniden girilirse yenisi açılmaz, mevcut durum korunur. Alt görevi olan derste dersin kendisi artık konu sayılmaz,
+yalnızca yaprak alt görevler tekrar kuyruğuna girer. Sol panelde satır: `konu (ders) · derste işlendi N gün önce · sınava M gün`.
 
 ### 3.11 `review_log` — Tekrar geçmişi
 

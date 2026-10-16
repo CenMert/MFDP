@@ -24,6 +24,7 @@ from mfdp_app.db.plan_repository import PlanRepository
 from mfdp_app.db.session_repository import SessionRepository
 from mfdp_app.ui.side_panel import SidePanel, plan_sentence
 from mfdp_app.ui.plans_dialog import PlansDialog
+from mfdp_app.ui.lecture_dialog import LectureDialog
 from mfdp_app.ui.feedback_strip import FeedbackStrip
 
 class MainWindow(QMainWindow):
@@ -117,6 +118,7 @@ class MainWindow(QMainWindow):
         self.side_panel.setVisible(False)
         self.side_panel.edit_plans_requested.connect(self.open_plans)
         self.side_panel.review_start_requested.connect(self.start_task_session)
+        self.side_panel.lecture_requested.connect(self.open_lecture_dialog)
         outer_layout.addWidget(self.side_panel)
 
         content = QWidget()
@@ -701,6 +703,17 @@ class MainWindow(QMainWindow):
         delta = SidePanel.WIDTH if show else -SidePanel.WIDTH
         QTimer.singleShot(0, lambda: self.resize(max(self.minimumSizeHint().width(), self.width() + delta),
                                                  self.height()))
+
+    def open_lecture_dialog(self):
+        """Derste işlenenleri gir: aktif görevin (varsa) dersi varsayılan olarak seçilir."""
+        course_id = None
+        active = self.task_manager.get_active_task()
+        if active:
+            course_id = active.parent_id or active.id
+        dialog = LectureDialog(self, course_id)
+        dialog.topics_added.connect(self.side_panel.refresh)
+        dialog.exec()
+        self.side_panel.refresh()
 
     def open_plans(self):
         dialog = PlansDialog(self)
