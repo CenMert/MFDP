@@ -26,6 +26,7 @@ MFDP is a Pomodoro/focus-tracking desktop app for Linux (KDE recommended). The c
 - `dnd_manager.py` — KDE D-Bus DND integration (enable/disable system notifications).
 - `system_monitor.py` — Active window detection via KDE D-Bus. Intended to feed `AtomicAnalyzer.record_focus_shift`, but not instantiated anywhere yet.
 - `notifier.py` — Qt sound effects for session start/pause/complete and hourly gong.
+- `review_scheduler.py` — Exam-aware spaced review (1-3-7-14-30 days), Qt-free; topic = task, linked to exams via `calendar_events.task_id`. `plan_scheduler.py` — fires if-then plan prompts. `streak.py` — contribution-grid and tolerant streak maths.
 
 ### `db/` — Data access layer
 - `base_repository.py` — Thread-safe `ConnectionPool` (SQLite). All repos inherit from `BaseRepository`. Call `BaseRepository.initialize_pool(pool_size=5)` once at startup.

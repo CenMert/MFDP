@@ -14,7 +14,7 @@ class CalendarRepository(BaseRepository):
     @staticmethod
     def get_events_between(start_date: str, end_date: str) -> List[Dict]:
         rows = BaseRepository.execute_query(
-            "SELECT id, title, date, time, kind, note FROM calendar_events "
+            "SELECT id, title, date, time, kind, note, task_id FROM calendar_events "
             "WHERE date BETWEEN ? AND ? ORDER BY date, COALESCE(time, ''), id",
             (start_date, end_date),
             fetch_all=True
@@ -23,12 +23,31 @@ class CalendarRepository(BaseRepository):
 
     @staticmethod
     def add_event(title: str, date: str, kind: str = "diger",
-                  time: Optional[str] = None, note: Optional[str] = None) -> Optional[int]:
+                  time: Optional[str] = None, note: Optional[str] = None,
+                  task_id: Optional[int] = None) -> Optional[int]:
         return BaseRepository.execute_query(
-            "INSERT INTO calendar_events (title, date, time, kind, note) VALUES (?, ?, ?, ?, ?)",
-            (title, date, time, kind, note),
+            "INSERT INTO calendar_events (title, date, time, kind, note, task_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (title, date, time, kind, note, task_id),
             commit=True
         )
+
+    @staticmethod
+    def set_event_task(event_id: int, task_id: Optional[int]) -> bool:
+        """Sınavı bir derse (ana göreve) bağla / bağı kaldır."""
+        return BaseRepository.execute_query(
+            "UPDATE calendar_events SET task_id = ? WHERE id = ?", (task_id, event_id), commit=True
+        ) is not None
+
+    @staticmethod
+    def get_upcoming_exams(after_date: str) -> List[Dict]:
+        """Bir derse bağlı, `after_date`'ten sonraki sınavlar (en yakın önce)."""
+        rows = BaseRepository.execute_query(
+            "SELECT id, title, date, task_id FROM calendar_events "
+            "WHERE kind = 'sinav' AND task_id IS NOT NULL AND date > ? ORDER BY date, id",
+            (after_date,),
+            fetch_all=True
+        )
+        return [dict(r) for r in rows] if rows else []
 
     @staticmethod
     def delete_event(event_id: int) -> bool:

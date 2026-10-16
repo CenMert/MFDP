@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QPlainTextEdit, QDialo
 
 from mfdp_app.core import calendar_io
 from mfdp_app.db.calendar_repository import CalendarRepository
+from mfdp_app.db.task_repository import TaskRepository
 
 # Catppuccin Mocha
 BASE, SURFACE, OVERLAY, TEXT, SUBTEXT = "#1e1e2e", "#313244", "#45475a", "#cdd6f4", "#a6adc8"
@@ -239,13 +240,26 @@ class DayDialog(QDialog):
             kind_name, color = EVENT_KINDS.get(ev["kind"], EVENT_KINDS["diger"])
             time = f"{ev['time']} " if ev["time"] else ""
             self._row(f"<span style='color:{color}'>●</span> {time}{ev['title']} <i>({kind_name})</i>",
-                      lambda _=False, i=ev["id"]: self._delete(CalendarRepository.delete_event, i))
+                      lambda _=False, i=ev["id"]: self._delete(CalendarRepository.delete_event, i),
+                      event=ev)
         for r in ranges:
             self._row(f"<span style='color:{r['color']}'>▬</span> {r['label']} "
                       f"<i>({r['start_date']} → {r['end_date']})</i>",
                       lambda _=False, i=r["id"]: self._delete(CalendarRepository.delete_range, i))
 
-    def _row(self, html, on_delete):
+    def _course_combo(self, current_id=None):
+        """Ana görevler (dersler) listesi; ilk seçenek 'ders yok'."""
+        combo = QComboBox()
+        combo.addItem("— ders yok —", None)
+        for task in TaskRepository.get_root_tasks():
+            combo.addItem(task.name, task.id)
+        if current_id is not None:
+            idx = combo.findData(current_id)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+        return combo
+
+    def _row(self, html, on_delete, event=None):
         row = QHBoxLayout()
         label = QLabel(html)
         label.setWordWrap(True)
@@ -255,6 +269,21 @@ class DayDialog(QDialog):
         row.addWidget(label, 1)
         row.addWidget(btn)
         self.list_box.addLayout(row)
+        if event is not None and event["kind"] == "sinav":
+            # Sınavı derse bağla: tekrarlar sınavdan önceki güne çekilir, çalışılmamış konular hatırlatılır
+            sub = QHBoxLayout()
+            hint = QLabel("Ders (tekrar planı için):")
+            hint.setStyleSheet("color: #7f849c; font-size: 12px;")
+            combo = self._course_combo(event.get("task_id"))
+            combo.currentIndexChanged.connect(
+                lambda _=0, c=combo, i=event["id"]: self._set_course(i, c.currentData()))
+            sub.addWidget(hint)
+            sub.addWidget(combo, 1)
+            self.list_box.addLayout(sub)
+
+    def _set_course(self, event_id, task_id):
+        CalendarRepository.set_event_task(event_id, task_id)
+        self.changed = True
 
     def _delete(self, fn, item_id):
         fn(item_id)
@@ -280,6 +309,17 @@ class DayDialog(QDialog):
             row.addWidget(w)
         lay.addWidget(self.ev_title)
         lay.addLayout(row)
+        # Yalnızca 'sinav' türünde anlamlı: sınavın ait olduğu ders (tekrar planı için)
+        self.ev_course = self._course_combo()
+        self.ev_course.setToolTip("Sınavı bir derse bağlarsan o dersin konuları sınava göre tekrar planına girer")
+        self.ev_course_row = QWidget()
+        course_lay = QHBoxLayout(self.ev_course_row)
+        course_lay.setContentsMargins(0, 0, 0, 0)
+        course_lay.addWidget(QLabel("Ders:"))
+        course_lay.addWidget(self.ev_course, 1)
+        lay.addWidget(self.ev_course_row)
+        self.ev_kind.currentIndexChanged.connect(self._sync_course_visibility)
+        self._sync_course_visibility()
         self.layout_.addWidget(box)
 
     def _build_add_range(self):
@@ -303,12 +343,17 @@ class DayDialog(QDialog):
         lay.addLayout(row)
         self.layout_.addWidget(box)
 
+    def _sync_course_visibility(self, *_):
+        self.ev_course_row.setVisible(self.ev_kind.currentData() == "sinav")
+
     def _add_event(self):
         title = self.ev_title.text().strip()
         if not title:
             return
         time = self.ev_time.time().toString("HH:mm") if self.ev_use_time.isChecked() else None
-        CalendarRepository.add_event(title, _iso(self.day), self.ev_kind.currentData(), time)
+        kind = self.ev_kind.currentData()
+        course = self.ev_course.currentData() if kind == "sinav" else None
+        CalendarRepository.add_event(title, _iso(self.day), kind, time, None, course)
         self.ev_title.clear()
         self.changed = True
         self._refresh_list()

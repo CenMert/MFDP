@@ -174,7 +174,10 @@ Tüm değerler **TEXT** olarak saklanır (`str(value)`), okuyan taraf `int()` il
 | `time` | TEXT | `HH:MM` (24 saat) ya da `NULL` |
 | `kind` | TEXT | `sinav`, `odev`, `toplanti`, `diger` |
 | `note` | TEXT | serbest / `NULL` |
+| `task_id` | INTEGER | Yalnızca `kind='sinav'` için anlamlı: sınavın ait olduğu **ders** (`tasks.id`, ana görev) ya da `NULL`. Tekrar planı bu bağa göre çalışır |
 | `created_at` | TEXT | `CURRENT_TIMESTAMP` (UTC) |
+
+> Takvim JSON dışa/içe aktarma formatı `task_id`'yi **taşımaz**: içe aktarılan sınavlar derse bağlı gelmez, takvimde sınav satırından ders seçilmelidir.
 
 ### 3.7 `calendar_ranges` — Çok günlük dönemler
 
@@ -215,6 +218,36 @@ Oturum verileriyle henüz bağlantılı değildir.
 Yazan: `core/plan_scheduler.py` (saati gelince sorar, 60 dk pencere) + `ui/main_window.py` (Başla / 10 dk ertele / Bugün atla).
 Okuyan: `ui/side_panel.py` (bugünün planları, 28 günlük uyum). Kayıt düşmeyen geçmiş saatli plan = **kaçırıldı**
 (uygulama kapalıydı); bugün henüz cevaplanmamış plan sayılmaz.
+
+### 3.10 `review_state` — Konu başına aralıklı tekrar durumu
+
+Konu = görev (alt görev varsa yaprak görevler, yoksa dersin kendisi). Tekrar takvimi 1 → 3 → 7 → 14 → 30 gün.
+
+| Kolon | Tip | Format |
+|-------|-----|--------|
+| `task_id` | INTEGER PK | `tasks.id` |
+| `step` | INTEGER | başarılı tekrar sayısı (0 = ilk tekrar bekleniyor) |
+| `next_due` | TEXT | `YYYY-MM-DD` doğal vade |
+| `last_review` | TEXT | `YYYY-MM-DD` son tekrar ya da konunun takvime alındığı gün |
+| `lapses` | INTEGER | yalnızca kötü hatırlama (1–2) cevabıyla artar; kaçırılan gün sayılmaz |
+| `created_at` | TEXT | yerel zaman |
+
+### 3.11 `review_log` — Tekrar geçmişi
+
+| Kolon | Tip | Format |
+|-------|-----|--------|
+| `task_id`, `session_id` | INTEGER | konu ve tekrar oturumu |
+| `recall` | INTEGER | 1 Hiç · 2 Zor · 3 İyi · 4 Kolay |
+| `day`, `reviewed_at` | TEXT | mantıksal gün / yerel zaman |
+| `prev_step`, `prev_next_due`, `prev_last_review`, `prev_lapses` | | tekrardan önceki durum; aynı oturum için cevap değiştirilirse geri alınıp yeniden uygulanır |
+
+**Akış** (`core/review_scheduler.py`, kullanıcıdan ek giriş istemez):
+- Geri bildirim şeridinde **Okuma / Soru / Üretim** → konu takvime alınır, ilk tekrar yarın.
+- **Tekrar** + 1–4 hatırlama puanı → ≥3: bir sonraki adım; ≤2: başa dön, yarın tekrar.
+- Sınava bağlı derslerde (`calendar_events.task_id`): doğal vade sınavdan sonraya düşüyorsa sınavdan **bir gün öncesine** çekilir
+  (o güne kadar tekrar yapılmadıysa); sınava ≤14 gün kala hiç çalışılmamış ya da >7 gündür dokunulmamış konular kuyruğa girer.
+- Kuyruk günde en fazla 5 konu gösterir (sınava en yakın önce, sonra çok unutulan); gecikmiş konular borç olarak yığılmaz.
+- Oturumun konusu `sessions_v2.task_name` üzerinden `tasks.name` (UNIQUE) ile bulunur.
 
 **Süreklilik ızgarası** (`core/streak.py`, `ui/side_panel.py`) yeni veri tutmaz: `sessions_v2`'den son 18 haftanın
 mantıksal gün bazında iş dakikalarını hesaplar. Renk seviyesi çalışılan günlerin çeyreklerine göre (GitHub gibi);

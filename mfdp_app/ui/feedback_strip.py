@@ -7,7 +7,7 @@ FeedbackStrip - Bir iş oturumu kaydedilince timer'ın altında beliren tek sat�
 İkisi de isteğe bağlı; seçim anında kaydedilir. Yeni oturum başlayınca şerit kapanır.
 """
 
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QButtonGroup
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QButtonGroup, QWidget
 from PySide6.QtCore import Qt, Signal
 
 RATING_HINTS = {
@@ -17,6 +17,13 @@ RATING_HINTS = {
     4: "Çoğunlukla odaktaydım",
     5: "Tamamen içindeydim",
 }
+
+RECALL_CHOICES = [
+    (1, "1 · Hiç", "Hatırlayamadım"),
+    (2, "2 · Zor", "Büyük çoğunluğunu zor hatırladım"),
+    (3, "3 · İyi", "Çoğunu hatırladım"),
+    (4, "4 · Kolay", "Rahatça hatırladım"),
+]
 
 SESSION_KINDS = [
     ("okuma", "Okuma", "Okuma / ders dinleme / not çıkarma"),
@@ -30,13 +37,17 @@ SESSION_KINDS = [
 class FeedbackStrip(QFrame):
     rating_selected = Signal(int)
     kind_selected = Signal(str)
+    recall_selected = Signal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("FeedbackStrip")
-        row = QHBoxLayout(self)
-        row.setContentsMargins(10, 6, 6, 6)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(10, 6, 6, 6)
+        outer.setSpacing(4)
+        row = QHBoxLayout()
         row.setSpacing(4)
+        outer.addLayout(row)
 
         lbl = QLabel("Odak:")
         lbl.setObjectName("FeedbackLabel")
@@ -78,10 +89,34 @@ class FeedbackStrip(QFrame):
         btn_close.clicked.connect(self.hide)
         row.addWidget(btn_close)
 
+        # 'Tekrar' türünde: ne kadar hatırladın? (aralıklı tekrar takvimini ilerletir)
+        self.recall_row = QWidget()
+        recall = QHBoxLayout(self.recall_row)
+        recall.setContentsMargins(0, 0, 0, 0)
+        recall.setSpacing(4)
+        lbl3 = QLabel("Notlara bakmadan ne kadar hatırladın?")
+        lbl3.setObjectName("FeedbackLabel")
+        recall.addWidget(lbl3)
+        self.recall_group = QButtonGroup(self)
+        for value, text, tip in RECALL_CHOICES:
+            btn = QPushButton(text)
+            btn.setObjectName("FeedbackChip")
+            btn.setCheckable(True)
+            btn.setToolTip(tip)
+            btn.setCursor(Qt.PointingHandCursor)
+            self.recall_group.addButton(btn, value)
+            recall.addWidget(btn)
+        recall.addStretch()
+        self.recall_group.idClicked.connect(self.recall_selected.emit)
+        outer.addWidget(self.recall_row)
+        self.recall_row.hide()
+        self.kind_group.idClicked.connect(lambda i: self.recall_row.setVisible(self._kind_keys[i] == "tekrar"))
+
         self.hide()
 
     def open_for_session(self):
-        for group in (self.rating_group, self.kind_group):
+        self.recall_row.hide()
+        for group in (self.rating_group, self.kind_group, self.recall_group):
             group.setExclusive(False)
             for btn in group.buttons():
                 btn.setChecked(False)

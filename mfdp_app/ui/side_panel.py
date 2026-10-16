@@ -10,6 +10,9 @@ from PySide6.QtWidgets import (QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushBu
                                QWidget)
 from PySide6.QtCore import Qt, Signal
 
+from mfdp_app.core import review_scheduler
+from mfdp_app.db.review_repository import ReviewRepository
+
 from mfdp_app.core.streak import build_streak_data, ACTIVE_MINUTES, GRID_WEEKS
 from mfdp_app.core.daily_report import logical_day, format_duration
 from mfdp_app.core.plan_scheduler import PlanScheduler
@@ -33,8 +36,24 @@ def plan_sentence(plan: dict, with_days: bool = True) -> str:
     return f"EĞER {' · '.join(cond)}  →  {': '.join(then) or 'çalışmaya başla'}"
 
 
+class ClickLabel(QLabel):
+    """Tıklanabilir, satır kaydıran etiket."""
+    clicked = Signal()
+
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setWordWrap(True)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+
 class SidePanel(QFrame):
     edit_plans_requested = Signal()
+    review_start_requested = Signal(int)
 
     WIDTH = 330
 
@@ -85,6 +104,29 @@ class SidePanel(QFrame):
         line.setObjectName("SideLine")
         root.addWidget(line)
 
+        reviews_title = QLabel("Bugünün tekrarları")
+        reviews_title.setObjectName("SideTitle")
+        root.addWidget(reviews_title)
+
+        self.reviews_box = QWidget()
+        self.reviews_layout = QVBoxLayout(self.reviews_box)
+        self.reviews_layout.setContentsMargins(0, 0, 0, 0)
+        self.reviews_layout.setSpacing(4)
+        root.addWidget(self.reviews_box)
+
+        self.lbl_review_stats = QLabel()
+        self.lbl_review_stats.setObjectName("SideMuted")
+        self.lbl_review_stats.setWordWrap(True)
+        self.lbl_review_stats.setToolTip(
+            "Geri bildirim: son 14 günde kaç iş oturumuna tür etiketi girdin.\n"
+            "Bu oran düşerse sistem fazla yük oluyor demektir; sadeleştirilmeli.")
+        root.addWidget(self.lbl_review_stats)
+
+        line2 = QFrame()
+        line2.setFrameShape(QFrame.HLine)
+        line2.setObjectName("SideLine")
+        root.addWidget(line2)
+
         plans_title = QLabel("Bugünün planları")
         plans_title.setObjectName("SideTitle")
         root.addWidget(plans_title)
@@ -114,14 +156,55 @@ class SidePanel(QFrame):
         self.lbl_week.setText(
             f"Son 7 gün: {data.active_last_7}/7 aktif   ·   {GRID_WEEKS} hafta: "
             f"{format_duration(data.total_minutes * 60)}")
+        self._refresh_reviews()
         self._refresh_plans()
 
-    def _refresh_plans(self):
-        while self.plans_layout.count():
-            item = self.plans_layout.takeAt(0)
+    @staticmethod
+    def _clear_layout(layout):
+        while layout.count():
+            item = layout.takeAt(0)
             if item.widget():
                 item.widget().hide()  # deleteLater'a kadar eskisi üst üste çizilmesin
                 item.widget().deleteLater()
+
+    def _refresh_reviews(self):
+        self._clear_layout(self.reviews_layout)
+        today = logical_day(datetime.datetime.now())
+        queue = review_scheduler.build_queue(today, limit=None)
+        shown = queue[:review_scheduler.MAX_QUEUE]
+        if not shown:
+            empty = QLabel("Bugün tekrar yok.\nBir konuyu \"Okuma\" / \"Soru\" olarak etiketlersen "
+                           "tekrar takvimi kendiliğinden başlar.")
+            empty.setObjectName("SideMuted")
+            empty.setWordWrap(True)
+            self.reviews_layout.addWidget(empty)
+        for item in shown:
+            exam = f" · sınava {item.days_to_exam} gün" if item.days_to_exam is not None else ""
+            course = f" <span style='color:#7f849c'>({item.course_name})</span>" \
+                if item.course_name != item.name else ""
+            lapse = f" · {item.lapses}× unutuldu" if item.lapses else ""
+            row = ClickLabel(
+                f"<span style='color:#89b4fa; font-weight:bold'>↻</span>&nbsp; {item.name}{course}<br>"
+                f"<span style='color:#7f849c; font-size:11px'>{item.reason_text}{exam}{lapse}</span>")
+            row.setObjectName("SidePlanRow")
+            row.setToolTip("Tıkla: bu konuyu aç ve sayacı başlat")
+            row.clicked.connect(lambda tid=item.task_id: self.review_start_requested.emit(tid))
+            self.reviews_layout.addWidget(row)
+        if len(queue) > len(shown):
+            more = QLabel(f"+{len(queue) - len(shown)} konu daha sırada")
+            more.setObjectName("SideMuted")
+            self.reviews_layout.addWidget(more)
+
+        done = ReviewRepository.count_reviews_on(today.isoformat())
+        tagged, total = ReviewRepository.feedback_fill_rate(
+            datetime.datetime.now() - datetime.timedelta(days=14))
+        parts = [f"Bugün {done} tekrar yapıldı"]
+        if total:
+            parts.append(f"Etiketleme (14 gün): {tagged}/{total}")
+        self.lbl_review_stats.setText(" · ".join(parts))
+
+    def _refresh_plans(self):
+        self._clear_layout(self.plans_layout)
 
         now = datetime.datetime.now()
         day = logical_day(now)

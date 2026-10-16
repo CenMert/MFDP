@@ -19,6 +19,7 @@ from mfdp_app.ui.mini_window import MiniWindow
 from mfdp_app.ui.block_detail_dialog import BlockDetailDialog
 from mfdp_app.core.daily_report import build_block_report, logical_day, WORK_MODES
 from mfdp_app.core.plan_scheduler import PlanScheduler
+from mfdp_app.core import review_scheduler
 from mfdp_app.db.plan_repository import PlanRepository
 from mfdp_app.db.session_repository import SessionRepository
 from mfdp_app.ui.side_panel import SidePanel, plan_sentence
@@ -115,6 +116,7 @@ class MainWindow(QMainWindow):
         self.side_panel = SidePanel()
         self.side_panel.setVisible(False)
         self.side_panel.edit_plans_requested.connect(self.open_plans)
+        self.side_panel.review_start_requested.connect(self.start_task_session)
         outer_layout.addWidget(self.side_panel)
 
         content = QWidget()
@@ -222,6 +224,7 @@ class MainWindow(QMainWindow):
         self.feedback_strip = FeedbackStrip()
         self.feedback_strip.rating_selected.connect(lambda v: self._save_feedback(focus_rating=v))
         self.feedback_strip.kind_selected.connect(lambda k: self._save_feedback(session_kind=k))
+        self.feedback_strip.recall_selected.connect(self._on_recall)
         main_layout.addWidget(self.feedback_strip)
 
         self.day_panel = DayPanel()
@@ -720,6 +723,32 @@ class MainWindow(QMainWindow):
     def _save_feedback(self, focus_rating=None, session_kind=None):
         if self._last_session_id:
             SessionRepository.set_session_feedback(self._last_session_id, focus_rating, session_kind)
+            if session_kind:
+                # Okuma / soru / üretim konuyu tekrar takvimine alır
+                session = SessionRepository.get_session(self._last_session_id)
+                review_scheduler.on_session_kind(session and session['task_name'], session_kind)
+                self._refresh_side_panel_if_open()
+
+    def _on_recall(self, recall):
+        """'Tekrar' oturumundan sonra 1-4 hatırlama puanı: konunun takvimini ilerlet / başa sar."""
+        if not self._last_session_id:
+            return
+        session = SessionRepository.get_session(self._last_session_id)
+        review_scheduler.apply_recall(session and session['task_name'], self._last_session_id, recall)
+        self._refresh_side_panel_if_open()
+
+    def _refresh_side_panel_if_open(self):
+        if self.side_panel.isVisible():
+            self.side_panel.refresh()
+
+    def start_task_session(self, task_id):
+        """Görevi seç, count-up'a geç ve oturumu başlat (plan 'Başla' ve tekrar satırı için ortak)."""
+        if task_id:
+            self.task_manager.set_active_task(task_id)
+        if self.timer_mode != "countup":
+            self.toggle_timer_mode()
+        if not self.timer_logic_countup.is_running:
+            self.toggle_timer_countup()
 
     def on_plan_due(self, plan):
         """Planın saati geldi: başla / ertele / atla."""
@@ -739,12 +768,7 @@ class MainWindow(QMainWindow):
             day = logical_day(datetime.datetime.now())
             if button is btn_start:
                 self._pending_plan_log = PlanRepository.log_outcome(plan['id'], day, 'started')
-                if plan.get('task_id'):
-                    self.task_manager.set_active_task(plan['task_id'])
-                if self.timer_mode != "countup":
-                    self.toggle_timer_mode()
-                if not self.timer_logic_countup.is_running:
-                    self.toggle_timer_countup()
+                self.start_task_session(plan.get('task_id'))
             elif button is btn_snooze:
                 PlanRepository.log_outcome(plan['id'], day, 'snoozed')
                 self.plan_scheduler.snooze(plan['id'], 10)
