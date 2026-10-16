@@ -153,4 +153,78 @@ QLabel#DayBlockDuration {
     font-weight: bold;
     color: #a6e3a1;
 }
+
+/* Pasif butonlar (ör. oturum yokken kesinti butonları) */
+QPushButton:disabled {
+    color: #585b70;
+    background-color: #1e1e2e;
+    border-color: #313244;
+}
+
+/* Sol yan panel: süreklilik ızgarası + eğer-ise planları */
+QFrame#SidePanel {
+    background-color: #181825;
+    border: 1px solid #313244;
+    border-radius: 8px;
+}
+QLabel#SideTitle {
+    font-size: 13px;
+    font-weight: bold;
+    color: #cdd6f4;
+}
+QLabel#SideStat {
+    font-size: 13px;
+    font-weight: bold;
+    color: #f9e2af;
+}
+QLabel#SideMuted {
+    font-size: 11px;
+    color: #7f849c;
+}
+QLabel#SidePlanRow {
+    font-size: 12px;
+    color: #bac2de;
+}
+QFrame#SideLine {
+    color: #313244;
+}
+QPushButton#SideToggle {
+    background-color: #313244;
+    border: 1px solid #45475a;
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: bold;
+}
+QPushButton#SideToggle:checked {
+    background-color: #a6e3a1;
+    color: #1e1e2e;
+}
+
+/* Oturum sonu geri bildirim şeridi */
+QFrame#FeedbackStrip {
+    background-color: #181825;
+    border: 1px solid #45475a;
+    border-radius: 8px;
+}
+QLabel#FeedbackLabel {
+    font-size: 12px;
+    color: #a6adc8;
+}
+QPushButton#FeedbackChip {
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 5px;
+}
+QPushButton#FeedbackChip:checked {
+    background-color: #f9e2af;
+    color: #1e1e2e;
+    font-weight: bold;
+}
+QPushButton#FeedbackClose {
+    background: transparent;
+    border: none;
+    color: #7f849c;
+    padding: 2px 6px;
+}
 """

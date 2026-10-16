@@ -1,5 +1,6 @@
+import datetime
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
-                               QLabel, QPushButton, QHBoxLayout, QCheckBox)
+                               QLabel, QPushButton, QHBoxLayout, QCheckBox, QMessageBox)
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from mfdp_app.core.notifier import Notifier
@@ -16,7 +17,13 @@ from mfdp_app.ui.recursive_task_window import RecursiveTaskWindow
 from mfdp_app.ui.day_panel import DayPanel
 from mfdp_app.ui.mini_window import MiniWindow
 from mfdp_app.ui.block_detail_dialog import BlockDetailDialog
-from mfdp_app.core.daily_report import build_block_report
+from mfdp_app.core.daily_report import build_block_report, logical_day, WORK_MODES
+from mfdp_app.core.plan_scheduler import PlanScheduler
+from mfdp_app.db.plan_repository import PlanRepository
+from mfdp_app.db.session_repository import SessionRepository
+from mfdp_app.ui.side_panel import SidePanel, plan_sentence
+from mfdp_app.ui.plans_dialog import PlansDialog
+from mfdp_app.ui.feedback_strip import FeedbackStrip
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -62,6 +69,15 @@ class MainWindow(QMainWindow):
         # Oturum DB'ye yazılınca gün panelini tazele
         self.timer_logic_countdown.session_saved_signal.connect(self.day_panel.refresh)
         self.timer_logic_countup.session_saved_signal.connect(self.day_panel.refresh)
+        self.timer_logic_countdown.session_saved_signal.connect(self.on_session_saved)
+        self.timer_logic_countup.session_saved_signal.connect(self.on_session_saved)
+        self._last_session_id = None
+        self._pending_plan_log = None  # "Başla" denen planın log id'si; ilk kaydedilen oturuma bağlanır
+
+        # Eğer-ise planları: saati gelince sor
+        self.plan_scheduler = PlanScheduler(self)
+        self.plan_scheduler.plan_due.connect(self.on_plan_due)
+        QShortcut(QKeySequence("Ctrl+B"), self, self.toggle_side_panel)
 
         self.timer_logic_countdown.reset()
 
@@ -91,14 +107,31 @@ class MainWindow(QMainWindow):
     def init_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(40, 40, 40, 40)
-        main_layout.setSpacing(20)
-        central_widget.setLayout(main_layout)
+        outer_layout = QHBoxLayout(central_widget)
+        outer_layout.setContentsMargins(12, 12, 0, 12)
+        outer_layout.setSpacing(0)
 
-        # Üst kısım: Toggle butonu (sağ üstte)
+        # Sol yan panel: süreklilik ızgarası + eğer-ise planları (başlangıçta kapalı)
+        self.side_panel = SidePanel()
+        self.side_panel.setVisible(False)
+        self.side_panel.edit_plans_requested.connect(self.open_plans)
+        outer_layout.addWidget(self.side_panel)
+
+        content = QWidget()
+        main_layout = QVBoxLayout(content)
+        main_layout.setContentsMargins(28, 28, 40, 28)
+        main_layout.setSpacing(20)
+        outer_layout.addWidget(content, 1)
+
+        # Üst kısım: yan panel tuşu (solda), mod tuşu (sağda)
         top_layout = QHBoxLayout()
+        self.btn_side = QPushButton("▤  Süreklilik")
+        self.btn_side.setObjectName("SideToggle")
+        self.btn_side.setCheckable(True)
+        self.btn_side.setCursor(Qt.PointingHandCursor)
+        self.btn_side.setToolTip("Seri ızgarası ve eğer-ise planları (Ctrl+B)")
+        self.btn_side.clicked.connect(self.toggle_side_panel)
+        top_layout.addWidget(self.btn_side)
         top_layout.addStretch()
         
         # Toggle butonu
@@ -185,6 +218,12 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.lbl_timer_countup)
 
         # Gün paneli (açılır özet, her iki modda da görünür)
+        # Oturum sonu geri bildirimi (odak puanı + oturum türü)
+        self.feedback_strip = FeedbackStrip()
+        self.feedback_strip.rating_selected.connect(lambda v: self._save_feedback(focus_rating=v))
+        self.feedback_strip.kind_selected.connect(lambda k: self._save_feedback(session_kind=k))
+        main_layout.addWidget(self.feedback_strip)
+
         self.day_panel = DayPanel()
         self.day_panel.block_clicked.connect(self.open_block_detail)
         self.day_panel.expanded_changed.connect(self.on_day_panel_toggled)
@@ -391,6 +430,7 @@ class MainWindow(QMainWindow):
         is_running = self.timer_logic_countdown.start_stop()
 
         if is_running:
+            self.feedback_strip.hide()
             self.notifier.play_start_counter_sound()
             self.btn_start.setText("Duraklat")
         else:
@@ -403,6 +443,7 @@ class MainWindow(QMainWindow):
             self.finish_timer_countup()
         else:
             self.timer_logic_countup.start()
+            self.feedback_strip.hide()
             self.notifier.play_start_counter_sound()
             self.lbl_status_countup.setText("Odakta")
             self._sync_countup_buttons()
@@ -644,6 +685,79 @@ class MainWindow(QMainWindow):
         """DND gerçekten açıldı/kapandı: tuşu senkronla, olayı kaydet."""
         self.btn_dnd.setChecked(enabled)
         self.atomic_analyzer.record_dnd_toggle(enabled)
+
+    # ------------------------------------------------------------------
+    # Yan panel, eğer-ise planları, oturum sonu geri bildirimi
+    # ------------------------------------------------------------------
+    def toggle_side_panel(self):
+        show = not self.side_panel.isVisible()
+        if show:
+            self.side_panel.refresh()
+        self.side_panel.setVisible(show)
+        self.btn_side.setChecked(show)
+        delta = SidePanel.WIDTH if show else -SidePanel.WIDTH
+        QTimer.singleShot(0, lambda: self.resize(max(self.minimumSizeHint().width(), self.width() + delta),
+                                                 self.height()))
+
+    def open_plans(self):
+        dialog = PlansDialog(self)
+        dialog.plans_changed.connect(self.side_panel.refresh)
+        dialog.exec()
+        self.side_panel.refresh()
+
+    def on_session_saved(self, session_id):
+        self._last_session_id = session_id
+        if self._pending_plan_log:
+            PlanRepository.attach_session(self._pending_plan_log, session_id)
+            self._pending_plan_log = None
+        session = SessionRepository.get_session(session_id)
+        if session and session['mode'] in WORK_MODES:
+            self.feedback_strip.open_for_session()
+            QTimer.singleShot(0, lambda: self.resize(self.width(), self.sizeHint().height()))
+        if self.side_panel.isVisible():
+            self.side_panel.refresh()
+
+    def _save_feedback(self, focus_rating=None, session_kind=None):
+        if self._last_session_id:
+            SessionRepository.set_session_feedback(self._last_session_id, focus_rating, session_kind)
+
+    def on_plan_due(self, plan):
+        """Planın saati geldi: başla / ertele / atla."""
+        box = QMessageBox(self)
+        box.setWindowTitle("Plan zamanı")
+        box.setIcon(QMessageBox.Information)
+        box.setText(plan_sentence(plan))
+        box.setInformativeText("Önceden verdiğin karar. Şimdi başlıyor musun?")
+        btn_start = box.addButton("Başla", QMessageBox.AcceptRole)
+        btn_snooze = box.addButton("10 dk ertele", QMessageBox.ActionRole)
+        box.addButton("Bugün atla", QMessageBox.RejectRole)
+        box.setStyleSheet("QMessageBox { background-color: #1e1e2e; }")
+        box.setAttribute(Qt.WA_DeleteOnClose)
+        box.setModal(False)
+
+        def handle(button):
+            day = logical_day(datetime.datetime.now())
+            if button is btn_start:
+                self._pending_plan_log = PlanRepository.log_outcome(plan['id'], day, 'started')
+                if plan.get('task_id'):
+                    self.task_manager.set_active_task(plan['task_id'])
+                if self.timer_mode != "countup":
+                    self.toggle_timer_mode()
+                if not self.timer_logic_countup.is_running:
+                    self.toggle_timer_countup()
+            elif button is btn_snooze:
+                PlanRepository.log_outcome(plan['id'], day, 'snoozed')
+                self.plan_scheduler.snooze(plan['id'], 10)
+            else:
+                PlanRepository.log_outcome(plan['id'], day, 'skipped')
+            if self.side_panel.isVisible():
+                self.side_panel.refresh()
+
+        box.buttonClicked.connect(handle)
+        self.notifier.play_start_counter_sound()
+        self.raise_()
+        self.activateWindow()
+        box.show()
 
     def reset_timer(self):
         """Countdown timer'ı sıfırla."""

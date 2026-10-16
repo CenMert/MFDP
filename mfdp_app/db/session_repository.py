@@ -324,6 +324,51 @@ class SessionRepository(BaseRepository):
         return []
     
     @staticmethod
+    def set_session_feedback(session_id: int, focus_rating: Optional[int] = None,
+                             session_kind: Optional[str] = None) -> bool:
+        """
+        Oturum sonu geri bildirimini kaydet (verilen alanlar güncellenir).
+        
+        Args:
+            session_id: Session ID
+            focus_rating: 1-5 öznel odak puanı
+            session_kind: 'okuma' | 'soru' | 'tekrar' | 'uretim' | 'diger'
+        """
+        updates, params = [], []
+        if focus_rating is not None:
+            updates.append("focus_rating = ?")
+            params.append(int(focus_rating))
+        if session_kind is not None:
+            updates.append("session_kind = ?")
+            params.append(session_kind)
+        if not updates:
+            return True
+        params.append(session_id)
+        return BaseRepository.execute_query(
+            f"UPDATE sessions_v2 SET {', '.join(updates)} WHERE id = ?",
+            tuple(params),
+            commit=True
+        ) is not None
+    
+    @staticmethod
+    def get_work_sessions_since(start: datetime.datetime) -> List[Dict]:
+        """
+        Get Focus / Free Timer sessions starting at or after `start` (for streak grid).
+        
+        Returns:
+            List of dicts with start_time and duration_seconds
+        """
+        rows = BaseRepository.execute_query(
+            """
+            SELECT start_time, duration_seconds FROM sessions_v2
+            WHERE mode IN ('Focus', 'Free Timer') AND start_time >= ?
+            """,
+            (start.strftime('%Y-%m-%d %H:%M:%S'),),
+            fetch_all=True
+        )
+        return [dict(r) for r in rows] if rows else []
+    
+    @staticmethod
     def delete_session(session_id: int) -> bool:
         """
         Delete a session. Associated atomic events will cascade delete.

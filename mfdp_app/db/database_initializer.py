@@ -52,6 +52,13 @@ class DatabaseInitializer:
             );
             """)
             
+            # Migration: oturum sonu geri bildirimi (odak puanı 1-5, oturum türü)
+            for column in ("focus_rating INTEGER", "session_kind TEXT"):
+                try:
+                    cursor.execute(f"ALTER TABLE sessions_v2 ADD COLUMN {column}")
+                except sqlite3.OperationalError:
+                    pass
+
             # Sessions indices
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_start_time ON sessions_v2 (start_time);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_completed ON sessions_v2 (completed);")
@@ -145,6 +152,31 @@ class DatabaseInitializer:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_calendar_events_date ON calendar_events (date);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_calendar_ranges_start ON calendar_ranges (start_date, end_date);")
 
+            # 7. Eğer-ise planları (implementation intentions)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS if_then_plans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                weekdays TEXT NOT NULL,
+                time TEXT,
+                cue TEXT,
+                task_id INTEGER,
+                action TEXT,
+                is_active BOOLEAN DEFAULT 1,
+                created_at TEXT NOT NULL
+            );
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS plan_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plan_id INTEGER NOT NULL,
+                day TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                session_id INTEGER,
+                logged_at TEXT NOT NULL
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_plan_log_plan_day ON plan_log (plan_id, day);")
+
             conn.commit()
             print("✅ Database V2 schema initialized successfully.")
             return True
@@ -169,7 +201,7 @@ class DatabaseInitializer:
         
         try:
             cursor = conn.cursor()
-            required_tables = ['settings', 'sessions_v2', 'tasks', 'tags', 'atomic_events', 'calendar_events', 'calendar_ranges']
+            required_tables = ['settings', 'sessions_v2', 'tasks', 'tags', 'atomic_events', 'calendar_events', 'calendar_ranges', 'if_then_plans', 'plan_log']
             
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             existing_tables = {row[0] for row in cursor.fetchall()}
@@ -204,7 +236,7 @@ class DatabaseInitializer:
         
         try:
             cursor = conn.cursor()
-            tables = ['calendar_events', 'calendar_ranges', 'atomic_events', 'tasks', 'tags', 'sessions_v2', 'settings']
+            tables = ['plan_log', 'if_then_plans', 'calendar_events', 'calendar_ranges', 'atomic_events', 'tasks', 'tags', 'sessions_v2', 'settings']
             
             for table in tables:
                 cursor.execute(f"DROP TABLE IF EXISTS {table}")

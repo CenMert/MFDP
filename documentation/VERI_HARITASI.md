@@ -60,6 +60,8 @@ okuma; veri yazmaz, yerelde bir şey saklamaz).
 | `completed` | BOOLEAN | Pomodoro: `1` = süre doldu; `0` = reset, mod değişimi, uygulama kapanışı. Count-up (`countup_v1`): `1` = Bitir, `0` = uygulama kapanışı | |
 | `task_name` | TEXT | Görevin **adı** (id değil) | Görev yeniden adlandırılırsa eski oturumlarla bağ kopar |
 | `category` | TEXT | Görevin **tag**'i | `tags.name` ile eşleşir ama FK değil |
+| `focus_rating` | INTEGER | 1–5 öznel odak puanı ya da `NULL` (atlandı) | Bitir sonrası geri bildirim şeridi (`ui/feedback_strip.py`) |
+| `session_kind` | TEXT | `okuma`, `soru`, `tekrar`, `uretim`, `diger` ya da `NULL` | Aynı şerit; SM-2/FSRS tekrar planlaması için temel |
 | `interruption_count` | INTEGER | Pomodoro: duraklatma sayısı + kapanış nedenleri (reset/mod değişimi/app_exit). Count-up (`countup_v1`): **yalnızca işaretlenen iç/dış kesintiler** | Analizde `timer_model` ile ayırın |
 
 **Yazanlar**
@@ -186,6 +188,37 @@ Tüm değerler **TEXT** olarak saklanır (`str(value)`), okuyan taraf `int()` il
 
 Takvim tabloları yalnızca `ui/calendar_window.py` tarafından (`CalendarRepository` ile) okunup yazılır.
 Oturum verileriyle henüz bağlantılı değildir.
+
+### 3.8 `if_then_plans` — Eğer-ise planları (implementation intentions)
+
+| Kolon | Tip | Format |
+|-------|-----|--------|
+| `id` | INTEGER PK | |
+| `weekdays` | TEXT | `0,2,4` (0 = Pazartesi) |
+| `time` | TEXT | `HH:MM` ya da `NULL` (yalnızca durum ipuçlu plan; zamanla sorulmaz) |
+| `cue` | TEXT | durum ipucu: "kahvaltıdan sonra" |
+| `task_id` | INTEGER | `tasks.id` ya da `NULL` |
+| `action` | TEXT | "1 oturum soru çöz" |
+| `is_active` | BOOLEAN | `0` = silindi (soft delete; geçmiş sonuçlar kalır) |
+| `created_at` | TEXT | `YYYY-MM-DD HH:MM:SS` yerel |
+
+### 3.9 `plan_log` — Plan sonuçları
+
+| Kolon | Tip | Format |
+|-------|-----|--------|
+| `plan_id` | INTEGER | `if_then_plans.id` |
+| `day` | TEXT | mantıksal gün `YYYY-MM-DD` |
+| `outcome` | TEXT | `started`, `skipped`, `snoozed` |
+| `session_id` | INTEGER | "Başla" sonrası kaydedilen ilk oturum (`sessions_v2.id`) |
+| `logged_at` | TEXT | yerel zaman |
+
+Yazan: `core/plan_scheduler.py` (saati gelince sorar, 60 dk pencere) + `ui/main_window.py` (Başla / 10 dk ertele / Bugün atla).
+Okuyan: `ui/side_panel.py` (bugünün planları, 28 günlük uyum). Kayıt düşmeyen geçmiş saatli plan = **kaçırıldı**
+(uygulama kapalıydı); bugün henüz cevaplanmamış plan sayılmaz.
+
+**Süreklilik ızgarası** (`core/streak.py`, `ui/side_panel.py`) yeni veri tutmaz: `sessions_v2`'den son 18 haftanın
+mantıksal gün bazında iş dakikalarını hesaplar. Renk seviyesi çalışılan günlerin çeyreklerine göre (GitHub gibi);
+gün ≥25 dk ise aktif; tek boş gün seriyi bozmaz, iki gün üst üste boşluk bozar.
 
 ---
 
