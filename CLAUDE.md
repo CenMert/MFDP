@@ -20,7 +20,7 @@ The app is a PySide6 GUI — no test suite or linter is configured. Manual testi
 MFDP is a Pomodoro/focus-tracking desktop app for Linux (KDE recommended). The codebase is organized as the `mfdp_app` package with four layers:
 
 ### `core/` — Business logic (no UI, no direct DB writes)
-- `timer.py` — `PmdrCountdownTimer` (Pomodoro phase cycling) and `CountUpTimer` (FreeTimer mode). Both use Qt `QTimer` and emit signals (`timeout_signal`, `state_changed_signal`, `finished_signal`, `task_changed_signal`). `FocusSession` is a pure dataclass holding runtime state; the timer class owns the logic.
+- `timer.py` — `PmdrCountdownTimer` (Pomodoro phase cycling) and `CountUpTimer` (FreeTimer mode, the default; no pause — start → mark internal/external interruptions → finish, sessions tagged `timer_model: "countup_v1"`). Both use Qt `QTimer` and emit signals (`timeout_signal`, `state_changed_signal`, `finished_signal`, `task_changed_signal`). `FocusSession` is a pure dataclass holding runtime state; the timer class owns the logic.
 - `atomic_analyzer.py` — Event sourcing engine. Records `AtomicEvent` instances (interruptions, focus shifts, DND toggles, milestones) with elapsed-time offsets. Designed for future ML analysis.
 - `task_manager.py` / `recursive_task_manager.py` — Flat and tree-structured task CRUD. The recursive manager auto-completes parents when all children are done.
 - `dnd_manager.py` — KDE D-Bus DND integration (enable/disable system notifications).

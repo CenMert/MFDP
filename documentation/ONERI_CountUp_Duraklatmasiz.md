@@ -3,7 +3,34 @@
 *2026-10-16 · Kaynaklar: `focus_tracker.db` (salt okunur, 169 oturum, 2026-01-09 → 2026-10-16),
 `reports/Çalışma verimi ve Pomodoro.md`, `documentation/VERI_HARITASI.md`*
 
-## Kısa cevap
+## Karar (2026-10-16) — uygulandı: `countup-first` branch'i
+
+Kullanıcının kararı öneriyi sadeleştirdi: **ayrı mola akışı yok.**
+- Count-up açılışta varsayılan mod. Butonlar: **Başlat/Bitir · İç kesinti (I) · Dış kesinti (E)**. Duraklatma ve Sıfırla yok.
+- **Bitir = oturum biter.** Devam etmek yeni bir oturumdur. Böylece:
+  - **Mola süresi** iki oturum arasındaki boşluktan ölçülür, ayrı bir mola zamanlayıcısına gerek kalmaz.
+  - **Odak süresinin nasıl düştüğü** count-up oturum uzunluklarından görülür (gün içinde k'ıncı oturum, haftalar boyunca trend).
+- 60 sn altındaki oturumlar yanlış başlatma sayılıp kaydedilmez.
+- Yeni oturumlar `timer_model: "countup_v1"` ile etiketlenir. `end_reason` ve iç/dış kesinti `reason`'ı `atomic_events`'e yazılır.
+- Mini pencere ve panel tıklaması count-up'ta başlat/bitir yapar.
+- Pomodoro (geri sayım) modu şimdilik **olduğu gibi** duruyor (duraklatmalı). Kaldırma kararı Faz 6 değerlendirmesine kaldı.
+- Aşağıdaki plandaki Faz 3 (mola diyaloğu) **iptal**. Hedef/zil (Faz 1) ve odak puanı (Faz 4) henüz yapılmadı.
+
+Analiz için örnek sorgu (mola = iki oturum arası boşluk):
+```sql
+WITH s AS (
+  SELECT id, start_time, end_time, duration_seconds,
+         LAG(end_time) OVER (ORDER BY start_time) AS prev_end
+  FROM sessions_v2 WHERE mode = 'Free Timer'
+)
+SELECT id, duration_seconds / 60.0 AS focus_min,
+       (julianday(start_time) - julianday(prev_end)) * 1440 AS break_min
+FROM s
+WHERE prev_end IS NOT NULL
+  AND (julianday(start_time) - julianday(prev_end)) * 1440 < 120;  -- aynı çalışma bloğu
+```
+
+## Kısa cevap (ilk öneri)
 
 **İkisine de evet, ama iki düzeltmeyle:**
 

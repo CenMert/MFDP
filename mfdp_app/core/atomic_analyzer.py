@@ -145,7 +145,8 @@ class AtomicAnalyzer:
     
     def start_session(self, planned_duration: int,
                      session_type: str = "pomodoro", app_before: str = None,
-                     session_id: Optional[int] = None) -> None:
+                     session_id: Optional[int] = None,
+                     extra_metadata: Optional[Dict[str, Any]] = None) -> None:
         """
         Mark the start of a new focus session.
         session_id may be None initially; it is assigned retroactively in flush_events().
@@ -166,7 +167,8 @@ class AtomicAnalyzer:
             metadata={
                 "planned_duration": planned_duration,
                 "session_type": session_type,
-                "app_before": app_before
+                "app_before": app_before,
+                **(extra_metadata or {})
             }
         )
 
@@ -194,7 +196,8 @@ class AtomicAnalyzer:
             }
         )
 
-    def complete_session(self, actual_duration: int, completed_by: str = "timer") -> None:
+    def complete_session(self, actual_duration: int, completed_by: str = "timer",
+                         extra_metadata: Optional[Dict[str, Any]] = None) -> None:
         """
         Mark the successful completion of a session.
         
@@ -218,7 +221,8 @@ class AtomicAnalyzer:
                 "focus_completion_ratio": (
                     actual_duration / self.session_planned_duration 
                     if self.session_planned_duration else 0
-                )
+                ),
+                **(extra_metadata or {})
             }
         )
         

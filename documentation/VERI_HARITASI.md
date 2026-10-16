@@ -57,10 +57,10 @@ okuma; veri yazmaz, yerelde bir şey saklamaz).
 | `duration_seconds` | INTEGER | **net** süre (duraklatmalar hariç, `active_seconds`) | |
 | `planned_duration_minutes` | INTEGER | Pomodoro/mola: ayardaki süre; Free Timer ve manuel giriş: `NULL` | |
 | `mode` | TEXT | `Focus`, `Short Break`, `Long Break`, `Free Timer` | Molalar da kaydedilir |
-| `completed` | BOOLEAN | `1` = süre doldu / kullanıcı "Tamamla" dedi; `0` = reset, mod değişimi, uygulama kapanışı | |
+| `completed` | BOOLEAN | Pomodoro: `1` = süre doldu; `0` = reset, mod değişimi, uygulama kapanışı. Count-up (`countup_v1`): `1` = Bitir, `0` = uygulama kapanışı | |
 | `task_name` | TEXT | Görevin **adı** (id değil) | Görev yeniden adlandırılırsa eski oturumlarla bağ kopar |
 | `category` | TEXT | Görevin **tag**'i | `tags.name` ile eşleşir ama FK değil |
-| `interruption_count` | INTEGER | Duraklatma sayısı + kapanış nedenleri (reset/mod değişimi/app_exit) | |
+| `interruption_count` | INTEGER | Pomodoro: duraklatma sayısı + kapanış nedenleri (reset/mod değişimi/app_exit). Count-up (`countup_v1`): **yalnızca işaretlenen iç/dış kesintiler** | Analizde `timer_model` ile ayırın |
 
 **Yazanlar**
 - `core/timer.py` → `PmdrCountdownTimer._save_current_session()` ve `CountUpTimer._save_current_session()`
@@ -90,6 +90,11 @@ okuma; veri yazmaz, yerelde bir şey saklamaz).
 | `metadata` | TEXT | JSON nesnesi (`json.dumps`) ya da `NULL` | Okurken `json.loads` → dict |
 | `created_at` | TEXT | SQLite `CURRENT_TIMESTAMP` → **UTC**, `YYYY-MM-DD HH:MM:SS` | Diğer zaman alanları yerel saattir |
 
+**Count-up modeli (`countup_v1`, 2026-10-16'dan itibaren varsayılan mod):** duraklatma yok.
+Başlat → (iç/dış kesinti işaretle) → Bitir. Devam etmek yeni bir oturumdur, dolayısıyla
+**mola süresi = aynı gün ardışık iki oturum arasındaki boşluk** (`next.start_time − prev.end_time`) ve
+odak süresinin seyri = oturum uzunluklarının zamana göre değişimi. 60 saniyenin altındaki oturumlar kaydedilmez.
+
 **Akış:** `AtomicAnalyzer` olayları `event_buffer` listesinde tutar → timer oturumu kaydedince
 `flush_events(session_id=...)` tek transaction'da `AtomicEventRepository.insert_events()` ile yazar.
 Oturum DB'ye yazılmazsa (ör. 0 saniyelik oturum) buffer'daki olaylar atılır.
@@ -98,12 +103,12 @@ Oturum DB'ye yazılmazsa (ör. 0 saniyelik oturum) buffer'daki olaylar atılır.
 
 | `event_type` | Kim tetikler | `metadata` alanları |
 |--------------|-------------|---------------------|
-| `session_started` | Timer, yeni oturum başlarken (Focus, molalar ve Free Timer dahil) | `planned_duration` (sn; Free Timer'da `0`), `session_type` (= mode), `app_before` (hep `null`) |
-| `interruption_detected` | Timer, kullanıcı duraklatınca | `reason`=`user_pause`, `severity`=`low`, `interruption_number`, `first_interruption_at`, `recovery_app` (`null`), `active_seconds` |
-| `session_resumed` | Timer, duraklatmadan devam edince | `app_context` (`null`), `pause_seconds`, `active_seconds` |
+| `session_started` | Timer, yeni oturum başlarken (Focus, molalar ve Free Timer dahil) | `planned_duration` (sn; Free Timer'da `0`), `session_type` (= mode), `app_before` (hep `null`); count-up'ta ayrıca `timer_model: "countup_v1"` |
+| `interruption_detected` | Pomodoro: kullanıcı duraklatınca (`reason`=`user_pause`, `severity`=`low`). Count-up: İç kesinti / Dış kesinti butonu veya I / E tuşu, oturum **durmadan** (`reason`=`internal`/`external`, `severity`=`low`/`medium`) | `reason`, `severity`, `interruption_number`, `first_interruption_at`, `recovery_app` (`null`), `active_seconds` |
+| `session_resumed` | Pomodoro timer, duraklatmadan devam edince (count-up'ta duraklatma yok) | `app_context` (`null`), `pause_seconds`, `active_seconds` |
 | `milestone_reached` | Pomodoro timer, **yalnızca Focus**, net sürenin %25/50/75'i | `milestone_type` (`quarter`/`halfway`/`three_quarters`), `percentage` |
-| `session_completed` | Süre doldu (`completed_by=timer`) / Free Timer'da "Tamamla" (`user`) | `actual_duration`, `planned_duration`, `completed_by`, `interruption_count`, `focus_completion_ratio` |
-| `session_abandoned` | Reset, mod değişimi, uygulama kapanışı | `reason` (`reset`/`mode_change`/`app_exit`), `interruption_count`, `partial_completion` |
+| `session_completed` | Süre doldu (`completed_by=timer`) / count-up'ta Bitir (`user`) | `actual_duration`, `planned_duration`, `completed_by`, `interruption_count`, `focus_completion_ratio`; count-up'ta ayrıca `end_reason: "finish"`, `timer_model` |
+| `session_abandoned` | Reset, mod değişimi, uygulama kapanışı | `reason` (`reset`/`mode_change`/`app_exit`), `interruption_count`, `partial_completion`. Count-up'ta 60 sn altı Bitir (`too_short`) olayı DB'ye **yazılmaz**, oturum atılır |
 | `dnd_toggled` | `MainWindow.on_dnd_changed` (🔕 butonu / Ctrl+D), yalnızca oturum aktifken | `dnd_enabled` |
 
 **Tanımlı ama hiçbir yerden çağrılmayan olaylar** (API var, entegrasyon yok):
@@ -241,4 +246,6 @@ Oturum verileriyle henüz bağlantılı değildir.
 4. **`elapsed_seconds` duvar saati,** net süre değil; duraklama sonrası olaylarda `metadata.active_seconds` kullanın.
 5. **DB yolu göreli** (`focus_tracker.db`) ve `notifier.py` ses dosyalarını `os.getcwd()`'ye göre arar: uygulama proje kökünden başlatılmazsa yeni boş bir DB oluşur. `run.sh` bu yüzden `cd` yapar.
 6. **Focus-shift / dikkat dağınıklığı verisi toplanmıyor;** README'deki "aktif pencere takibi" özelliği şu an bağlı değil.
-7. **Manuel oturumlar** `Free Timer` olarak işaretlendiği için gerçek Free Timer oturumlarından ayırt edilemez ve atomik olayları yoktur.
+7. **İki timer modeli aynı `Free Timer` modunu paylaşıyor.** 2026-10-16 öncesi Free Timer oturumları duraklatmalı;
+   `completed` ve `interruption_count` anlamları farklı. Ayırmak için `session_started.metadata.timer_model = 'countup_v1'` kullanın.
+8. **Manuel oturumlar** `Free Timer` olarak işaretlendiği için gerçek Free Timer oturumlarından ayırt edilemez ve atomik olayları yoktur.

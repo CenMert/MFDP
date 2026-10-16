@@ -381,9 +381,15 @@ class PmdrCountdownTimer(QObject):
 
 class CountUpTimer(QObject):
     """
-    Count-up timer (stopwatch) - Süreyi yukarı doğru sayar
-    Mola modları yok, sadece başlat/duraklat, sıfırla ve tamamla
+    Count-up timer (stopwatch) - Süreyi yukarı doğru sayar.
+
+    Duraklatma yok: Başlat -> (iç/dış kesinti işaretle) -> Bitir.
+    Devam etmek yeni bir oturumdur; mola süresi iki oturum arasındaki boşluktan,
+    odak süresinin seyri de oturum uzunluklarından okunur.
     """
+
+    TIMER_MODEL = "countup_v1"  # Analizde eski (duraklatmalı) veriyi ayırmak için
+    MIN_SAVE_SECONDS = 60       # Bunun altındaki oturumlar yanlış başlatma sayılır
     
     timeout_signal = Signal(str)  # "MM:SS" formatında
     finished_signal = Signal(str)  # "Free Timer" - tamamlandığında
@@ -403,69 +409,79 @@ class CountUpTimer(QObject):
         self.current_task_id = None
         self.atomic_analyzer = atomic_analyzer
 
-    def start_stop(self):
-        """Başlat/Duraklat"""
+    def start(self):
+        """Yeni oturum başlat (çalışıyorsa bir şey yapmaz)."""
         if self.is_running:
-            self.timer.stop()
-            self.is_running = False
-            if self.current_session:
-                self.current_session.mark_interruption()
-                self.current_session.pause()
-            if self.atomic_analyzer:
-                self.atomic_analyzer.record_interruption(
-                    reason="user_pause",
-                    severity=InterruptionSeverity.LOW,
-                    active_seconds=self.current_session.active_seconds if self.current_session else None
-                )
-        else:
-            if self.current_session:
-                pause_seconds = self.current_session.resume()
-                if self.atomic_analyzer:
-                    self.atomic_analyzer.resume_session(
-                        pause_seconds=pause_seconds,
-                        active_seconds=self.current_session.active_seconds
-                    )
-            else:
-                self._start_new_session()
-
-            self.timer.start(1000)
-            self.is_running = True
-
-        return self.is_running
-    
-    def reset(self):
-        """Sıfırla - Mevcut session'ı kaydet (eğer çalışma süresi varsa)"""
-        if self.current_session and self.current_session.active_seconds > 0:
-            if not self.current_session.is_paused:
-                self.current_session.mark_interruption("reset")
-            if self.atomic_analyzer:
-                self.atomic_analyzer.abandon_session(reason="reset")
-            self._save_current_session(completed=0)
-
-        self.timer.stop()
-        self.is_running = False
-        self.current_session = None
+            return False
+        self._start_new_session()
         self.current_time = 0
         self._emit_time()
+        self.timer.start(1000)
+        self.is_running = True
+        return True
 
-    def complete(self):
-        """Tamamla - Timer'ı durdur ve session'ı tamamlanmış olarak kaydet"""
+    def finish(self):
+        """Bitir - oturumu kaydet. Devam etmek yeni bir oturum demektir.
+
+        Returns:
+            Kaydedildiyse True; MIN_SAVE_SECONDS altındaki yanlış başlatmalar atılır (False).
+        """
+        if not self.is_running:
+            return False
         self.timer.stop()
         self.is_running = False
 
-        if self.current_session:
+        saved = False
+        if self.current_session and self.current_session.active_seconds >= self.MIN_SAVE_SECONDS:
             self.current_session.is_completed = True
             if self.atomic_analyzer:
                 self.atomic_analyzer.complete_session(
-                    actual_duration=self.current_time,
-                    completed_by="user"
+                    actual_duration=self.current_session.active_seconds,
+                    completed_by="user",
+                    extra_metadata={"end_reason": "finish", "timer_model": self.TIMER_MODEL}
                 )
             self._save_current_session(completed=1)
+            saved = True
+        else:
+            if self.atomic_analyzer:
+                self.atomic_analyzer.abandon_session(reason="too_short")
+                self.atomic_analyzer.event_buffer = []  # session_id yok, kaydedilmeyecek
+            self.current_session = None
 
         self.current_time = 0
         self._emit_time()
-        self.finished_signal.emit("Free Timer")
-    
+        if saved:  # Atılan yanlış başlatma için bitiş sesi çalmasın
+            self.finished_signal.emit("Free Timer")
+        return saved
+
+    def toggle(self):
+        """Tek tuş (mini pencere / panel): durmuşsa başlat, çalışıyorsa bitir."""
+        if self.is_running:
+            self.finish()
+        else:
+            self.start()
+        return self.is_running
+
+    def mark_interruption(self, kind: str) -> int:
+        """Oturumu durdurmadan kesinti işaretle.
+
+        Args:
+            kind: "internal" (kendi aklımın dağılması) veya "external" (biri/bir şey böldü)
+
+        Returns:
+            Bu oturumdaki toplam kesinti sayısı (çalışmıyorsa 0)
+        """
+        if not self.is_running or not self.current_session:
+            return 0
+        self.current_session.mark_interruption(kind)
+        if self.atomic_analyzer:
+            self.atomic_analyzer.record_interruption(
+                reason=kind,
+                severity=InterruptionSeverity.MEDIUM if kind == "external" else InterruptionSeverity.LOW,
+                active_seconds=self.current_session.active_seconds
+            )
+        return self.current_session.interruption_count
+
     def set_task(self, task_id):
         """Timer'a task ata"""
         # Eğer aynı task_id zaten ayarlıysa, signal emit etme (sonsuz döngüyü önle)
@@ -499,7 +515,8 @@ class CountUpTimer(QObject):
         if self.atomic_analyzer:
             self.atomic_analyzer.start_session(
                 planned_duration=0,
-                session_type="Free Timer"
+                session_type="Free Timer",
+                extra_metadata={"timer_model": self.TIMER_MODEL}
             )
 
     def _update_timer(self):
@@ -550,8 +567,8 @@ class CountUpTimer(QObject):
 
     def save_on_exit(self):
         """Uygulama kapanırken aktif session'ı kaydet"""
-        if self.current_session and self.current_session.active_seconds > 0:
-            self.current_session.mark_interruption("app_exit")
+        # Kapanış kesinti sayılmaz: interruption_count yalnızca işaretlenen kesintileri sayar
+        if self.current_session and self.current_session.active_seconds >= self.MIN_SAVE_SECONDS:
             if self.atomic_analyzer:
                 self.atomic_analyzer.abandon_session(reason="app_exit")
             self._save_current_session(completed=0)

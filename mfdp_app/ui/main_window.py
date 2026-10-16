@@ -65,6 +65,11 @@ class MainWindow(QMainWindow):
 
         self.timer_logic_countdown.reset()
 
+        # Count-up birincil mod: açılışta ona geç
+        self.toggle_timer_mode()
+        QShortcut(QKeySequence("I"), self, lambda: self.mark_interruption_countup("internal"))
+        QShortcut(QKeySequence("E"), self, lambda: self.mark_interruption_countup("external"))
+
         # DND sadece tuş / Ctrl+D ile yönetilir
         self.dnd_manager.dnd_changed_signal.connect(self.on_dnd_changed)
         QShortcut(QKeySequence("Ctrl+D"), self, self.toggle_dnd_manual)
@@ -211,20 +216,22 @@ class MainWindow(QMainWindow):
         self.btn_start_countup.setVisible(False)
         btn_layout_countup.addWidget(self.btn_start_countup)
 
-        self.btn_reset_countup = QPushButton("Sıfırla")
-        self.btn_reset_countup.setCursor(Qt.PointingHandCursor)
-        self.btn_reset_countup.clicked.connect(self.reset_timer_countup)
-        self.btn_reset_countup.setMinimumHeight(60)
-        self.btn_reset_countup.setVisible(False)
-        btn_layout_countup.addWidget(self.btn_reset_countup)
-        
-        self.btn_complete_countup = QPushButton("Tamamla")
-        self.btn_complete_countup.setCursor(Qt.PointingHandCursor)
-        self.btn_complete_countup.clicked.connect(self.complete_timer_countup)
-        self.btn_complete_countup.setMinimumHeight(60)
-        self.btn_complete_countup.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
-        self.btn_complete_countup.setVisible(False)
-        btn_layout_countup.addWidget(self.btn_complete_countup)
+        # Duraklatma yok: kesintiler oturumu durdurmadan işaretlenir
+        self.btn_internal_countup = QPushButton("İç kesinti")
+        self.btn_internal_countup.setCursor(Qt.PointingHandCursor)
+        self.btn_internal_countup.setToolTip("Aklım dağıldı / kendim böldüm (I)")
+        self.btn_internal_countup.clicked.connect(lambda: self.mark_interruption_countup("internal"))
+        self.btn_internal_countup.setMinimumHeight(60)
+        self.btn_internal_countup.setVisible(False)
+        btn_layout_countup.addWidget(self.btn_internal_countup)
+
+        self.btn_external_countup = QPushButton("Dış kesinti")
+        self.btn_external_countup.setCursor(Qt.PointingHandCursor)
+        self.btn_external_countup.setToolTip("Biri / bir şey böldü (E)")
+        self.btn_external_countup.clicked.connect(lambda: self.mark_interruption_countup("external"))
+        self.btn_external_countup.setMinimumHeight(60)
+        self.btn_external_countup.setVisible(False)
+        btn_layout_countup.addWidget(self.btn_external_countup)
         main_layout.addLayout(btn_layout_countup)
 
         # Mola butonları (sadece countdown için)
@@ -329,7 +336,7 @@ class MainWindow(QMainWindow):
                 self.timer_logic_countdown.start_stop()
         else:
             if self.timer_logic_countup.is_running:
-                self.timer_logic_countup.start_stop()
+                self.finish_timer_countup()
         
         # Mod değiştir
         if self.timer_mode == "countdown":
@@ -349,8 +356,9 @@ class MainWindow(QMainWindow):
             self.lbl_status_countup.setVisible(True)
             self.lbl_timer_countup.setVisible(True)
             self.btn_start_countup.setVisible(True)
-            self.btn_reset_countup.setVisible(True)
-            self.btn_complete_countup.setVisible(True)
+            self.btn_internal_countup.setVisible(True)
+            self.btn_external_countup.setVisible(True)
+            self._sync_countup_buttons()
             
             # Aktif timer'ı değiştir
             self.timer_logic = self.timer_logic_countup
@@ -362,8 +370,8 @@ class MainWindow(QMainWindow):
             self.lbl_status_countup.setVisible(False)
             self.lbl_timer_countup.setVisible(False)
             self.btn_start_countup.setVisible(False)
-            self.btn_reset_countup.setVisible(False)
-            self.btn_complete_countup.setVisible(False)
+            self.btn_internal_countup.setVisible(False)
+            self.btn_external_countup.setVisible(False)
             
             # Countdown UI'ını göster
             self.lbl_status.setVisible(True)
@@ -390,37 +398,48 @@ class MainWindow(QMainWindow):
             self.btn_start.setText("Devam Et")
     
     def toggle_timer_countup(self):
-        """Count-up timer için başlat/duraklat."""
-        is_running = self.timer_logic_countup.start_stop()
-        
-        if is_running:
-            self.notifier.play_start_counter_sound()
-            self.btn_start_countup.setText("Duraklat")
+        """Count-up: durmuşsa başlat, çalışıyorsa bitir (duraklatma yok)."""
+        if self.timer_logic_countup.is_running:
+            self.finish_timer_countup()
         else:
-            self.notifier.play_pause_counter_sound()
-            self.btn_start_countup.setText("Devam Et")
-    
-    def reset_timer_countup(self):
-        """Count-up timer'ı sıfırla."""
-        self.timer_logic_countup.reset()
-        self.btn_start_countup.setText("Başlat")
+            self.timer_logic_countup.start()
+            self.notifier.play_start_counter_sound()
+            self.lbl_status_countup.setText("Odakta")
+            self._sync_countup_buttons()
+
+    def finish_timer_countup(self):
+        """Count-up oturumunu bitir ve kaydet. Devam etmek yeni oturumdur."""
+        saved = self.timer_logic_countup.finish()
+        self.lbl_status_countup.setText(
+            "Kaydedildi — mola zamanı" if saved else "1 dk altı, kaydedilmedi")
         self.lbl_timer_countup.setText("00:00")
-    
-    def complete_timer_countup(self):
-        """Count-up timer'ı tamamla."""
-        self.timer_logic_countup.complete()
-        self.btn_start_countup.setText("Başlat")
-        self.lbl_timer_countup.setText("00:00")
-    
+        self._sync_countup_buttons()
+
+    def mark_interruption_countup(self, kind):
+        """İç/dış kesinti: oturum akmaya devam eder."""
+        if self.timer_mode != "countup":
+            return
+        count = self.timer_logic_countup.mark_interruption(kind)
+        if count:
+            label = "İç" if kind == "internal" else "Dış"
+            self.lbl_status_countup.setText(f"{label} kesinti işaretlendi · toplam {count}")
+
+    def _sync_countup_buttons(self):
+        running = self.timer_logic_countup.is_running
+        self.btn_start_countup.setText("Bitir" if running else "Başlat")
+        self.btn_internal_countup.setEnabled(running)
+        self.btn_external_countup.setEnabled(running)
+        if self.mini_window is not None:
+            self.mini_window.set_paused(not running)
+
     def update_timer_label_countup(self, time_str):
         """Count-up timer label'ını güncelle."""
         self._mini_set_time(time_str)
         self.lbl_timer_countup.setText(time_str)
     
     def on_timer_finished_countup(self, finished_mode):
-        """Count-up timer tamamlandığında."""
-        self.lbl_status_countup.setText("Tamamlandı!")
-        self.btn_start_countup.setText("Başlat")
+        """Count-up oturumu bittiğinde (durum yazısını finish_timer_countup belirler)."""
+        self._sync_countup_buttons()
             
     def update_timer_label(self, time_str):
         self._mini_set_time(time_str)
@@ -582,7 +601,7 @@ class MainWindow(QMainWindow):
         self.mini_window.show()
 
     def mini_toggle(self):
-        """Mini pencereye tek tık: duraklat / devam."""
+        """Mini pencere / panel tek tık: countdown'da duraklat/devam, count-up'ta başlat/bitir."""
         if self.timer_mode == "countdown":
             self.toggle_timer()
         else:
