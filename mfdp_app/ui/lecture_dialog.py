@@ -27,9 +27,9 @@ class LectureDialog(QDialog):
         self.setWindowTitle("Derste İşlenenler")
         self.resize(520, 560)
         self.setStyleSheet(
-            "QDialog { background-color: #1e1e2e; }"
-            "QPlainTextEdit, QTextBrowser, QComboBox, QDateEdit { background-color: #181825;"
-            " border: 1px solid #45475a; border-radius: 4px; padding: 3px; }")
+            "QDialog { background-color: #24201b; }"
+            "QPlainTextEdit, QTextBrowser, QComboBox, QDateEdit { background-color: #1c1915;"
+            " border: 1px solid #4a4238; border-radius: 4px; padding: 3px; }")
 
         root = QVBoxLayout(self)
         intro = QLabel("Bugün derste ne işlendi? Her satıra bir konu yaz; her biri tekrar takvimine "
@@ -63,7 +63,7 @@ class LectureDialog(QDialog):
 
         row = QHBoxLayout()
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #a6e3a1;")
+        self.lbl_status.setStyleSheet("color: #9b9b7a;")
         row.addWidget(self.lbl_status, 1)
         btn_add = QPushButton("Kaydet")
         btn_add.setObjectName("StartButton")
@@ -106,16 +106,16 @@ class LectureDialog(QDialog):
     def _reload_recent(self):
         rows = review_scheduler.recent_lecture_topics(14)
         if not rows:
-            self.recent.setHtml("<span style='color:#7f849c'>Henüz kayıt yok.</span>")
+            self.recent.setHtml("<span style='color:#8f8273'>Henüz kayıt yok.</span>")
             return
         html, last = [], None
         for r in rows:
             day = datetime.date.fromisoformat(r['learned_on'])
             if day != last:
-                html.append(f"<p style='margin:6px 0 2px; color:#f9e2af'><b>{day.day:02d}.{day.month:02d} "
+                html.append(f"<p style='margin:6px 0 2px; color:#ffcb69'><b>{day.day:02d}.{day.month:02d} "
                             f"{_TR_DAYS[day.weekday()]}</b></p>")
                 last = day
             prefix = f"{r['course_name']} · "
             topic = r['name'][len(prefix):] if r['name'].startswith(prefix) else r['name']
-            html.append(f"<div>• <span style='color:#7f849c'>{r['course_name']}</span> — {topic}</div>")
+            html.append(f"<div>• <span style='color:#8f8273'>{r['course_name']}</span> — {topic}</div>")
         self.recent.setHtml("".join(html))

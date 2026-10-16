@@ -1,27 +1,28 @@
 # mfdp_app/ui/styles.py
 
 MODERN_DARK_THEME = """
+/* Toprak tonları paleti — eşleme için bkz. mfdp_app/ui/palette.py */
 /* Genel Pencere Ayarları */
 QMainWindow {
-    background-color: #1e1e2e; /* Koyu Lacivert/Gri (Modern IDE teması gibi) */
+    background-color: #24201b; /* Koyu Lacivert/Gri (Modern IDE teması gibi) */
 }
 
 QWidget {
     font-family: 'Segoe UI', 'Roboto', sans-serif;
     font-size: 14px;
-    color: #cdd6f4; /* Yumuşak Beyaz */
+    color: #f1dca7; /* Yumuşak Beyaz */
 }
 
 /* Etiketler (Labels) */
 QLabel {
-    color: #cdd6f4;
+    color: #f1dca7;
 }
 
 /* Zamanlayıcıya özel stil (ID ile yakalayacağız) */
 QLabel#TimerLabel {
     font-size: 90px;
     font-weight: bold;
-    color: #a6e3a1; /* Pastel Yeşil */
+    color: #9b9b7a; /* Pastel Yeşil */
     margin: 20px 0;
 }
 
@@ -29,53 +30,53 @@ QLabel#TimerLabel {
 QLabel#StatusLabel {
     font-size: 28px;
     font-weight: 600;
-    color: #f9e2af; /* Pastel Sarı */
+    color: #ffcb69; /* Pastel Sarı */
 }
 
 /* Butonlar */
 QPushButton {
-    background-color: #313244;
-    border: 2px solid #45475a;
+    background-color: #35302a;
+    border: 2px solid #4a4238;
     border-radius: 8px; /* Yuvarlatılmış köşeler */
-    color: #ffffff;
+    color: #f1dca7;
     padding: 10px 20px;
     font-weight: bold;
 }
 
 QPushButton:hover {
-    background-color: #45475a; /* Üzerine gelince biraz açıl */
-    border-color: #585b70;
+    background-color: #4a4238; /* Üzerine gelince biraz açıl */
+    border-color: #5e5448;
 }
 
 QPushButton:pressed {
-    background-color: #1e1e2e; /* Tıklayınca gömül */
-    border-color: #a6e3a1;
+    background-color: #24201b; /* Tıklayınca gömül */
+    border-color: #9b9b7a;
 }
 
 /* Başlat Butonu için özel renk */
 QPushButton#StartButton {
-    background-color: #a6e3a1;
-    color: #1e1e2e; /* Yazı rengi koyu olsun */
+    background-color: #9b9b7a;
+    color: #24201b; /* Yazı rengi koyu olsun */
     border: none;
 }
 QPushButton#StartButton:hover {
-    background-color: #94e2d5;
+    background-color: #baa587;
 }
 
 /* Mod Butonları (Focus, Short, Long) */
 QPushButton#ModeButton {
     background-color: transparent;
-    border: 1px solid #45475a;
-    color: #bac2de;
+    border: 1px solid #4a4238;
+    color: #d2c2a8;
 }
 QPushButton#ModeButton:checked {
-    background-color: #45475a;
+    background-color: #4a4238;
     color: white;
 }
 
 /* Checkbox Stili */
 QCheckBox {
-    color: #bac2de;
+    color: #d2c2a8;
     spacing: 10px;
     font-size: 14px;
 }
@@ -83,14 +84,14 @@ QCheckBox {
 QCheckBox::indicator {
     width: 20px;
     height: 20px;
-    border: 2px solid #45475a;
+    border: 2px solid #4a4238;
     border-radius: 4px;
     background: transparent;
 }
 
 QCheckBox::indicator:checked {
-    background-color: #a6e3a1; /* Yeşil tik arka planı */
-    border-color: #a6e3a1;
+    background-color: #9b9b7a; /* Yeşil tik arka planı */
+    border-color: #9b9b7a;
 }
 
 /* İsteğe bağlı: Tik işareti görseli kullanmadan renk değişimi yeterli olabilir 
@@ -100,8 +101,8 @@ QCheckBox::indicator:checked {
 
 /* Gün Paneli (timer altındaki açılır özet) */
 QFrame#DayPanel {
-    background-color: #181825;
-    border: 1px solid #313244;
+    background-color: #1c1915;
+    border: 1px solid #35302a;
     border-radius: 8px;
 }
 QPushButton#DayPanelHeader {
@@ -109,25 +110,25 @@ QPushButton#DayPanelHeader {
     border: none;
     padding: 6px 8px;
     text-align: left;
-    color: #cdd6f4;
+    color: #f1dca7;
     font-size: 13px;
 }
 QPushButton#DayPanelHeader:hover {
-    color: #f9e2af;
+    color: #ffcb69;
 }
 QPushButton#DayNavButton {
     background-color: transparent;
     border: none;
     padding: 4px 6px;
-    color: #a6adc8;
+    color: #b8a99a;
     font-size: 12px;
 }
 QPushButton#DayNavButton:hover {
-    color: #cdd6f4;
-    background-color: #313244;
+    color: #f1dca7;
+    background-color: #35302a;
 }
 QPushButton#DayNavButton:disabled {
-    color: #45475a;
+    color: #4a4238;
 }
 QScrollArea#DayPanelScroll, QWidget#DayPanelBody {
     background: transparent;
@@ -137,79 +138,79 @@ QFrame#DayBlockRow {
     border-radius: 5px;
 }
 QFrame#DayBlockRow:hover {
-    background-color: #313244;
+    background-color: #35302a;
 }
 QLabel#DayTagLabel {
     font-size: 11px;
     font-weight: bold;
-    color: #a6adc8;
+    color: #b8a99a;
 }
 QLabel#DayBlockTime, QLabel#DayEmptyLabel {
     font-size: 12px;
-    color: #7f849c;
+    color: #8f8273;
 }
 QLabel#DayBlockDuration {
     font-size: 12px;
     font-weight: bold;
-    color: #a6e3a1;
+    color: #9b9b7a;
 }
 
 /* Pasif butonlar (ör. oturum yokken kesinti butonları) */
 QPushButton:disabled {
-    color: #585b70;
-    background-color: #1e1e2e;
-    border-color: #313244;
+    color: #5e5448;
+    background-color: #24201b;
+    border-color: #35302a;
 }
 
 /* Sol yan panel: süreklilik ızgarası + eğer-ise planları */
 QFrame#SidePanel {
-    background-color: #181825;
-    border: 1px solid #313244;
+    background-color: #1c1915;
+    border: 1px solid #35302a;
     border-radius: 8px;
 }
 QLabel#SideTitle {
     font-size: 13px;
     font-weight: bold;
-    color: #cdd6f4;
+    color: #f1dca7;
 }
 QLabel#SideStat {
     font-size: 13px;
     font-weight: bold;
-    color: #f9e2af;
+    color: #ffcb69;
 }
 QLabel#SideMuted {
     font-size: 11px;
-    color: #7f849c;
+    color: #8f8273;
 }
 QLabel#SidePlanRow {
     font-size: 12px;
-    color: #bac2de;
+    color: #d2c2a8;
 }
 QFrame#SideLine {
-    color: #313244;
+    color: #35302a;
 }
 QPushButton#SideToggle {
-    background-color: #313244;
-    border: 1px solid #45475a;
+    background-color: #35302a;
+    border: 1px solid #4a4238;
     border-radius: 5px;
     padding: 6px 10px;
     font-size: 11px;
     font-weight: bold;
 }
 QPushButton#SideToggle:checked {
-    background-color: #a6e3a1;
-    color: #1e1e2e;
+    background-color: #9b9b7a;
+    color: #24201b;
 }
 
 /* Oturum sonu geri bildirim şeridi */
 QFrame#FeedbackStrip {
-    background-color: #181825;
-    border: 1px solid #45475a;
+    background-color: #1c1915;
+    border: 1px solid #4a4238;
     border-radius: 8px;
 }
 QLabel#FeedbackLabel {
     font-size: 12px;
-    color: #a6adc8;
+    color: #b8a99a;
 }
 QPushButton#FeedbackChip {
     padding: 4px 8px;
@@ -217,14 +218,14 @@ QPushButton#FeedbackChip {
     border-radius: 5px;
 }
 QPushButton#FeedbackChip:checked {
-    background-color: #f9e2af;
-    color: #1e1e2e;
+    background-color: #ffcb69;
+    color: #24201b;
     font-weight: bold;
 }
 QPushButton#FeedbackClose {
     background: transparent;
     border: none;
-    color: #7f849c;
+    color: #8f8273;
     padding: 2px 6px;
 }
 """

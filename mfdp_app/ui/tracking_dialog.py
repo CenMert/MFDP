@@ -21,12 +21,12 @@ class TrackingDialog(QDialog):
         self.setWindowTitle("Tekrar Takibi")
         self.resize(440, 420)
         self.setStyleSheet(
-            "QDialog { background-color: #1e1e2e; }"
-            "QListWidget { background-color: #181825; border: 1px solid #45475a; border-radius: 4px; }"
+            "QDialog { background-color: #24201b; }"
+            "QListWidget { background-color: #1c1915; border: 1px solid #4a4238; border-radius: 4px; }"
             "QListWidget::item { padding: 5px; }"
-            "QListWidget::indicator { width: 16px; height: 16px; border: 1px solid #6c7086;"
-            " border-radius: 3px; background-color: #181825; }"
-            "QListWidget::indicator:checked { background-color: #a6e3a1; border-color: #a6e3a1; }")
+            "QListWidget::indicator { width: 16px; height: 16px; border: 1px solid #7a6e60;"
+            " border-radius: 3px; background-color: #1c1915; }"
+            "QListWidget::indicator:checked { background-color: #9b9b7a; border-color: #9b9b7a; }")
 
         root = QVBoxLayout(self)
         intro = QLabel("Hangi dersler için <b>tekrar hatırlatması</b> istiyorsun? İşaretlediklerin için "

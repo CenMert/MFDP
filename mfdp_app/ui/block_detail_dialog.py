@@ -17,8 +17,8 @@ from mfdp_app.core.daily_report import (BlockReport, Segment, format_duration,
 
 
 _SEGMENT_COLORS = {
-    "pause": QColor("#7f849c"),
-    "gap": QColor("#45475a"),
+    "pause": QColor("#8f8273"),
+    "gap": QColor("#4a4238"),
 }
 
 
@@ -39,7 +39,7 @@ class TimelineBar(QWidget):
         clip = QPainterPath()
         clip.addRoundedRect(rect, 6, 6)
         painter.setClipPath(clip)
-        painter.fillRect(rect, QColor("#181825"))
+        painter.fillRect(rect, QColor("#1c1915"))
 
         start = self.report.block.start
         total = max(1.0, (self.report.block.end - start).total_seconds())
@@ -68,7 +68,7 @@ class BlockDetailDialog(QDialog):
         self.setWindowTitle(f"{block.task_name} - Ayrıntı")
         self.setModal(False)
         self.setAttribute(Qt.WA_DeleteOnClose)
-        self.setStyleSheet("QDialog { background-color: #1e1e2e; }")
+        self.setStyleSheet("QDialog { background-color: #24201b; }")
         self.resize(540, 660)
 
         root = QVBoxLayout(self)
@@ -90,21 +90,21 @@ class BlockDetailDialog(QDialog):
             f"{day_text}  ·  {block.start:%H:%M} – {block.end:%H:%M}  ·  "
             f"{len(block.sessions)} oturum"
         )
-        subtitle.setStyleSheet("color: #7f849c; font-size: 12px;")
+        subtitle.setStyleSheet("color: #8f8273; font-size: 12px;")
         root.addWidget(subtitle)
 
         # Stat kartları
         cards = QHBoxLayout()
         cards.setSpacing(8)
         cards.addWidget(self._card("Net çalışma", format_duration(report.active_seconds),
-                                   f"ayrılan {format_duration(report.wall_seconds)}", "#a6e3a1"))
+                                   f"ayrılan {format_duration(report.wall_seconds)}", "#9b9b7a"))
         cards.addWidget(self._card("Verim", f"%{round(report.efficiency * 100)}",
                                    "net / ayrılan süre", self._efficiency_color(report.efficiency)))
         approx = "≈" if report.estimated_pause_count else ""
         cards.addWidget(self._card("Duraklama", f"{approx}{report.pause_count}",
-                                   f"toplam {approx}{format_duration(report.pause_seconds)}", "#f9e2af"))
+                                   f"toplam {approx}{format_duration(report.pause_seconds)}", "#ffcb69"))
         cards.addWidget(self._card("Ara", str(len(report.gaps)),
-                                   f"toplam {format_duration(report.gap_seconds)}", "#89b4fa"))
+                                   f"toplam {format_duration(report.gap_seconds)}", "#e8ac65"))
         root.addLayout(cards)
 
         # Zaman şeridi
@@ -115,7 +115,7 @@ class BlockDetailDialog(QDialog):
                             (f"{block.end:%H:%M}", Qt.AlignRight)):
             lbl = QLabel(text)
             lbl.setTextFormat(Qt.RichText)
-            lbl.setStyleSheet("color: #7f849c; font-size: 11px;")
+            lbl.setStyleSheet("color: #8f8273; font-size: 11px;")
             lbl.setAlignment(align)
             axis.addWidget(lbl, 1 if align == Qt.AlignCenter else 0)
         root.addLayout(axis)
@@ -132,7 +132,7 @@ class BlockDetailDialog(QDialog):
             note = QLabel("⚠ Bazı oturumlar eski kayıt: duraklama sayısı ve süresi tahmini, "
                           "zaman çizelgesinde o kısım soluk gösteriliyor.")
             note.setWordWrap(True)
-            note.setStyleSheet("color: #fab387; font-size: 11px;")
+            note.setStyleSheet("color: #d9ae94; font-size: 11px;")
             root.addWidget(note)
 
     # ------------------------------------------------------------------
@@ -142,21 +142,21 @@ class BlockDetailDialog(QDialog):
     @staticmethod
     def _efficiency_color(ratio: float) -> str:
         if ratio >= 0.85:
-            return "#a6e3a1"
+            return "#9b9b7a"
         if ratio >= 0.6:
-            return "#f9e2af"
-        return "#f38ba8"
+            return "#ffcb69"
+        return "#d08c60"
 
     @staticmethod
     def _card(title: str, value: str, sub: str, color: str) -> QFrame:
         card = QFrame()
-        card.setStyleSheet("QFrame { background-color: #313244; border-radius: 8px; }")
+        card.setStyleSheet("QFrame { background-color: #35302a; border-radius: 8px; }")
         layout = QVBoxLayout(card)
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(2)
-        for text, style in ((title, "color: #a6adc8; font-size: 11px;"),
+        for text, style in ((title, "color: #b8a99a; font-size: 11px;"),
                             (value, f"color: {color}; font-size: 20px; font-weight: bold;"),
-                            (sub, "color: #7f849c; font-size: 10px;")):
+                            (sub, "color: #8f8273; font-size: 10px;")):
             lbl = QLabel(text)
             lbl.setStyleSheet(style + " background: transparent;")
             layout.addWidget(lbl)
@@ -165,14 +165,14 @@ class BlockDetailDialog(QDialog):
     @staticmethod
     def _section_title(text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet("color: #bac2de; font-size: 13px; font-weight: bold; margin-top: 4px;")
+        lbl.setStyleSheet("color: #d2c2a8; font-size: 13px; font-weight: bold; margin-top: 4px;")
         return lbl
 
     def _legend_text(self) -> str:
         def dot(color: str, label: str) -> str:
             return f"<span style='color:{color};'>■</span> {label}"
-        return "&nbsp;&nbsp;".join([dot(self.report.color, "çalışma"), dot("#7f849c", "duraklama"),
-                                    dot("#45475a", "ara")])
+        return "&nbsp;&nbsp;".join([dot(self.report.color, "çalışma"), dot("#8f8273", "duraklama"),
+                                    dot("#4a4238", "ara")])
 
     def _analysis_grid(self) -> QGridLayout:
         r = self.report
@@ -209,7 +209,7 @@ class BlockDetailDialog(QDialog):
 
         for i, (key, value) in enumerate(rows):
             k = QLabel(key)
-            k.setStyleSheet("color: #a6adc8; font-size: 12px;")
+            k.setStyleSheet("color: #b8a99a; font-size: 12px;")
             v = QLabel(value)
             v.setWordWrap(True)
             v.setStyleSheet("font-size: 12px; font-weight: bold;")
@@ -223,10 +223,10 @@ class BlockDetailDialog(QDialog):
         items: List[tuple] = []
         for p in r.pauses:
             minute = f"{p.active_before_seconds // 60 + 1}. dk  ·  " if p.active_before_seconds is not None else ""
-            items.append((p.start, "#f9e2af", "Duraklama",
+            items.append((p.start, "#ffcb69", "Duraklama",
                           f"{p.start:%H:%M}  ·  {minute}{format_duration_precise(p.seconds)}"))
         for g in r.gaps:
-            items.append((g.start, "#89b4fa", "Ara",
+            items.append((g.start, "#e8ac65", "Ara",
                           f"{g.start:%H:%M} – {g.end:%H:%M}  ·  {format_duration_precise(g.seconds)}"))
         items.sort(key=lambda x: x[0])
 
@@ -238,7 +238,7 @@ class BlockDetailDialog(QDialog):
         if not items:
             text = "Kayıtlı duraklama ayrıntısı yok" if r.estimated_pause_count else "Hiç bölünmeden çalıştın 🎯"
             empty = QLabel(text)
-            empty.setStyleSheet("color: #7f849c; font-size: 12px;")
+            empty.setStyleSheet("color: #8f8273; font-size: 12px;")
             layout.addWidget(empty)
         for _, color, kind, text in items:
             row = QHBoxLayout()

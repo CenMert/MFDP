@@ -13,7 +13,7 @@ from PySide6.QtGui import QPainter, QColor, QFont
 from mfdp_app.core.streak import StreakData
 from mfdp_app.core.daily_report import format_duration
 
-LEVEL_COLORS = ["#313244", "#40594a", "#5b8a62", "#80b97f", "#a6e3a1"]
+LEVEL_COLORS = ["#35302a", "#4f5240", "#646850", "#797d62", "#9b9b7a"]
 _TR_MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 _TR_DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
 
@@ -60,7 +60,7 @@ class StreakGrid(QWidget):
         font.setPointSize(7)
         p.setFont(font)
 
-        p.setPen(QColor("#7f849c"))
+        p.setPen(QColor("#8f8273"))
         step = self.CELL + self.GAP
         for row in (0, 2, 4):
             p.drawText(QRect(0, self.TOP + row * step - 1, self.LEFT - 4, self.CELL + 2),
@@ -80,7 +80,7 @@ class StreakGrid(QWidget):
             p.drawRoundedRect(self._cell_rect(day), 2, 2)
         today_rect = self._cell_rect(self._data.today).adjusted(-1, -1, 1, 1)
         p.setBrush(Qt.NoBrush)
-        p.setPen(QColor("#f9e2af"))
+        p.setPen(QColor("#ffcb69"))
         p.drawRoundedRect(today_rect, 3, 3)
 
     def mouseMoveEvent(self, event):

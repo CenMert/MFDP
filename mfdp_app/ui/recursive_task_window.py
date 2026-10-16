@@ -30,7 +30,7 @@ class RecursiveTaskWindow(QDialog):
         
         self.setWindowTitle("Özyinelemeli Görev Yönetimi - MFDP")
         self.resize(900, 700)
-        self.setStyleSheet("background-color: #1e1e2e; color: #cdd6f4;")
+        self.setStyleSheet("background-color: #24201b; color: #f1dca7;")
         
         # Non-modal yap - arka plandaki pencereyi kullanılabilir tut
         self.setModal(False)
@@ -57,7 +57,7 @@ class RecursiveTaskWindow(QDialog):
         
         # Başlık
         title = QLabel("Özyinelemeli Görev Yönetimi")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #a6e3a1; padding: 10px;")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #9b9b7a; padding: 10px;")
         main_layout.addWidget(title)
         
         # Ana içerik: Sol tarafta tree, sağ tarafta form
@@ -65,7 +65,7 @@ class RecursiveTaskWindow(QDialog):
         
         # Sol: Task Tree
         tree_group = QGroupBox("Görevler (Hiyerarşik)")
-        tree_group.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #45475a; border-radius: 5px; margin-top: 30px; padding-top: 30px; }")
+        tree_group.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #4a4238; border-radius: 5px; margin-top: 30px; padding-top: 30px; }")
         tree_layout = QVBoxLayout()
         
         self.task_tree = QTreeWidget()
@@ -74,20 +74,20 @@ class RecursiveTaskWindow(QDialog):
         self.task_tree.setColumnWidth(1, 100)
         self.task_tree.setStyleSheet("""
             QTreeWidget {
-                background-color: #313244;
-                border: 1px solid #45475a;
+                background-color: #35302a;
+                border: 1px solid #4a4238;
                 border-radius: 5px;
-                color: #cdd6f4;
+                color: #f1dca7;
             }
             QTreeWidget::item {
                 padding: 5px;
                 height: 25px;
             }
             QTreeWidget::item:selected {
-                background-color: #45475a;
+                background-color: #4a4238;
             }
             QTreeWidget::item:hover {
-                background-color: #585b70;
+                background-color: #5e5448;
             }
         """)
         self.task_tree.itemChanged.connect(self.on_checkbox_changed)
@@ -97,7 +97,7 @@ class RecursiveTaskWindow(QDialog):
         
         # Alt görev ekleme butonu
         btn_add_subtask = QPushButton("Seçili Görevin Alt Görevi Olarak Ekle")
-        btn_add_subtask.setStyleSheet("background-color: #89b4fa; color: #1e1e2e; font-weight: bold; padding: 8px;")
+        btn_add_subtask.setStyleSheet("background-color: #e8ac65; color: #24201b; font-weight: bold; padding: 8px;")
         btn_add_subtask.setCursor(Qt.PointingHandCursor)
         btn_add_subtask.clicked.connect(self.add_as_subtask)
         tree_layout.addWidget(btn_add_subtask)
@@ -107,7 +107,7 @@ class RecursiveTaskWindow(QDialog):
         
         # Sağ: Task Formu
         form_group = QGroupBox("Görev Oluştur/Düzenle")
-        form_group.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #45475a; border-radius: 5px; margin-top: 30px; padding-top: 30px; }")
+        form_group.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #4a4238; border-radius: 5px; margin-top: 30px; padding-top: 30px; }")
         form_layout = QVBoxLayout()
         
         form = QFormLayout()
@@ -115,7 +115,7 @@ class RecursiveTaskWindow(QDialog):
         
         self.input_title = QLineEdit()
         self.input_title.setPlaceholderText("Görev başlığı")
-        self.input_title.setStyleSheet("background-color: #313244; border: 1px solid #45475a; border-radius: 5px; padding: 5px;")
+        self.input_title.setStyleSheet("background-color: #35302a; border: 1px solid #4a4238; border-radius: 5px; padding: 5px;")
         # Enter tuşuna basıldığında kaydet
         self.input_title.returnPressed.connect(self.save_task)
         form.addRow("Başlık:", self.input_title)
@@ -123,7 +123,7 @@ class RecursiveTaskWindow(QDialog):
         # Parent seçimi
         self.combo_parent = QComboBox()
         self.combo_parent.addItem("(Ana Görev)", None)
-        self.combo_parent.setStyleSheet("background-color: #313244; border: 1px solid #45475a; border-radius: 5px; padding: 5px;")
+        self.combo_parent.setStyleSheet("background-color: #35302a; border: 1px solid #4a4238; border-radius: 5px; padding: 5px;")
         form.addRow("Ana Görev:", self.combo_parent)
         
         # Süre seçimi
@@ -133,13 +133,13 @@ class RecursiveTaskWindow(QDialog):
         self.input_duration.setValue(0)
         self.input_duration.setSuffix(" dakika")
         self.input_duration.setSpecialValueText("Süresiz")
-        self.input_duration.setStyleSheet("background-color: #313244; border: 1px solid #45475a; border-radius: 5px; padding: 5px;")
+        self.input_duration.setStyleSheet("background-color: #35302a; border: 1px solid #4a4238; border-radius: 5px; padding: 5px;")
         form.addRow("Planlanan Süre:", self.input_duration)
         
         # Tag seçimi
         self.combo_tag = QComboBox()
         self.combo_tag.setEditable(True)
-        self.combo_tag.setStyleSheet("background-color: #313244; border: 1px solid #45475a; border-radius: 5px; padding: 5px;")
+        self.combo_tag.setStyleSheet("background-color: #35302a; border: 1px solid #4a4238; border-radius: 5px; padding: 5px;")
         form.addRow("Tag:", self.combo_tag)
         
         form_layout.addLayout(form)
@@ -147,7 +147,7 @@ class RecursiveTaskWindow(QDialog):
         # Bilgi etiketi
         info_label = QLabel("💡 İpucu: Tree'de bir göreve çift tıklayarak veya 'Alt Görev Ekle' butonuna basarak alt görev ekleyebilirsiniz.")
         info_label.setWordWrap(True)
-        info_label.setStyleSheet("color: #bac2de; font-size: 11px; padding: 5px; background-color: #313244; border-radius: 5px;")
+        info_label.setStyleSheet("color: #d2c2a8; font-size: 11px; padding: 5px; background-color: #35302a; border-radius: 5px;")
         form_layout.addWidget(info_label)
         
         # Butonlar
@@ -155,19 +155,19 @@ class RecursiveTaskWindow(QDialog):
         btn_layout.setSpacing(10)
         
         self.btn_save = QPushButton("Kaydet")
-        self.btn_save.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold; padding: 8px;")
+        self.btn_save.setStyleSheet("background-color: #9b9b7a; color: #24201b; font-weight: bold; padding: 8px;")
         self.btn_save.clicked.connect(self.save_task)
         # Enter tuşu için default button yapma - sadece görsel olarak vurgula
         self.btn_save.setAutoDefault(False)
         btn_layout.addWidget(self.btn_save)
         
         self.btn_delete = QPushButton("Sil")
-        self.btn_delete.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold; padding: 8px;")
+        self.btn_delete.setStyleSheet("background-color: #d08c60; color: #24201b; font-weight: bold; padding: 8px;")
         self.btn_delete.clicked.connect(self.delete_task)
         btn_layout.addWidget(self.btn_delete)
         
         self.btn_clear = QPushButton("Temizle")
-        self.btn_clear.setStyleSheet("background-color: #45475a; color: #cdd6f4; padding: 8px;")
+        self.btn_clear.setStyleSheet("background-color: #4a4238; color: #f1dca7; padding: 8px;")
         self.btn_clear.clicked.connect(self.clear_form)
         btn_layout.addWidget(self.btn_clear)
         
@@ -182,7 +182,7 @@ class RecursiveTaskWindow(QDialog):
         bottom_layout.addStretch()
         
         self.btn_close = QPushButton("Kapat")
-        self.btn_close.setStyleSheet("background-color: #45475a; color: #cdd6f4; padding: 8px 20px;")
+        self.btn_close.setStyleSheet("background-color: #4a4238; color: #f1dca7; padding: 8px 20px;")
         self.btn_close.clicked.connect(self.accept)
         # Default button olarak ayarlama - Enter tuşunun pencereyi kapatmasını önle
         self.btn_close.setDefault(False)
@@ -251,8 +251,8 @@ class RecursiveTaskWindow(QDialog):
         
         # Tamamlanmış görevler için stil
         if task.is_completed:
-            item.setForeground(0, QColor("#6c7086"))
-            item.setForeground(1, QColor("#6c7086"))
+            item.setForeground(0, QColor("#7a6e60"))
+            item.setForeground(1, QColor("#7a6e60"))
         
         return item
     

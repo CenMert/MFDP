@@ -42,7 +42,7 @@ MFDP is a Pomodoro/focus-tracking desktop app for Linux (KDE recommended). The c
 - `stats_window.py` — Lazy tab loading: Matplotlib charts render only when a tab is first opened.
 - `task_window.py` / `recursive_task_window.py` — Flat and hierarchical task UIs (non-modal).
 - `settings_dialog.py` — Persists settings via `SettingsRepository`.
-- `styles.py` — Single QSS string (`MODERN_DARK_THEME`) applied globally at startup; Catppuccin Mocha-inspired.
+- `styles.py` — Single QSS string (`MODERN_DARK_THEME`) applied globally at startup; earthy palette defined in `palette.py`.
 
 ### `models/`
 - `data_models.py` — `Task` dataclass (id, name, tag, color, parent_id, planned_duration_minutes, is_completed).

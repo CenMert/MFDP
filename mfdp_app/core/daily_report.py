@@ -31,7 +31,7 @@ MIN_GAP_SECONDS = 60  # Bundan kısa oturum arası boşluklar "ara" sayılmaz
 
 NO_TAG = "Etiketsiz"
 NO_TASK = "Görevsiz"
-DEFAULT_TAG_COLOR = "#89b4fa"
+DEFAULT_TAG_COLOR = "#e8ac65"
 
 _DB_TIME_FMT = '%Y-%m-%d %H:%M:%S'
 _TR_MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]

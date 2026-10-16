@@ -195,7 +195,7 @@ class SidePanel(QFrame):
             self.reviews_layout.addWidget(empty)
         for item in shown:
             exam = f" · sınava {item.days_to_exam} gün" if item.days_to_exam is not None else ""
-            course = f" <span style='color:#7f849c'>({item.course_name})</span>" \
+            course = f" <span style='color:#8f8273'>({item.course_name})</span>" \
                 if item.course_name != item.display_name else ""
             lapse = f" · {item.lapses}× unutuldu" if item.lapses else ""
             learned = ""
@@ -203,8 +203,8 @@ class SidePanel(QFrame):
                 ago = (today - item.learned_on).days
                 learned = " · derste işlendi " + ("bugün" if ago == 0 else f"{ago} gün önce")
             row = ClickLabel(
-                f"<span style='color:#89b4fa; font-weight:bold'>↻</span>&nbsp; {item.display_name}{course}<br>"
-                f"<span style='color:#7f849c; font-size:11px'>{item.reason_text}{learned}{exam}{lapse}</span>")
+                f"<span style='color:#e8ac65; font-weight:bold'>↻</span>&nbsp; {item.display_name}{course}<br>"
+                f"<span style='color:#8f8273; font-size:11px'>{item.reason_text}{learned}{exam}{lapse}</span>")
             row.setObjectName("SidePlanRow")
             row.setToolTip("Tıkla: bu konuyu aç ve sayacı başlat")
             row.clicked.connect(lambda tid=item.task_id: self.review_start_requested.emit(tid))
@@ -237,14 +237,14 @@ class SidePanel(QFrame):
         for plan in plans:
             outcome = outcomes.get(plan['id'])
             if outcome == 'started':
-                mark, color = "✓", "#a6e3a1"
+                mark, color = "✓", "#9b9b7a"
             elif outcome == 'skipped':
-                mark, color = "✗", "#f38ba8"
+                mark, color = "✗", "#d08c60"
             elif plan['time'] and now > PlanScheduler.due_time(plan, day) + datetime.timedelta(
                     minutes=PlanScheduler.GRACE_MINUTES):
-                mark, color = "–", "#7f849c"
+                mark, color = "–", "#8f8273"
             else:
-                mark, color = "•", "#f9e2af"
+                mark, color = "•", "#ffcb69"
             row = QLabel(f"<span style='color:{color}; font-weight:bold'>{mark}</span>&nbsp; "
                          f"{plan_sentence(plan, with_days=False)}")
             row.setObjectName("SidePlanRow")

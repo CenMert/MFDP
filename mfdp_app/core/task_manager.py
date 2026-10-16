@@ -15,8 +15,8 @@ class TaskManager(QObject):
         super().__init__()
         self._active_task_id: Optional[int] = None
         self._default_colors = [
-            '#89b4fa', '#a6e3a1', '#f9e2af', '#f38ba8',
-            '#cba6f7', '#fab387', '#94e2d5', '#f5c2e7'
+            '#e8ac65', '#9b9b7a', '#ffcb69', '#d08c60',
+            '#997b66', '#d9ae94', '#797d62', '#b58463'
         ]
         self._color_index = 0
     

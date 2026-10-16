@@ -24,10 +24,10 @@ class PlansDialog(QDialog):
         self.setWindowTitle("Eğer–İse Planları")
         self.resize(560, 520)
         self.setStyleSheet(
-            "QDialog { background-color: #1e1e2e; }"
-            "QListWidget, QLineEdit, QComboBox, QTimeEdit { background-color: #181825;"
-            " border: 1px solid #45475a; border-radius: 4px; padding: 3px; }"
-            "QListWidget::item:selected { background-color: #313244; color: #f9e2af; }")
+            "QDialog { background-color: #24201b; }"
+            "QListWidget, QLineEdit, QComboBox, QTimeEdit { background-color: #1c1915;"
+            " border: 1px solid #4a4238; border-radius: 4px; padding: 3px; }"
+            "QListWidget::item:selected { background-color: #35302a; color: #ffcb69; }")
 
         root = QVBoxLayout(self)
         intro = QLabel("Ne zaman ve nerede başlayacağını önceden kararlaştır: "

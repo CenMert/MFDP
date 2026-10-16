@@ -44,7 +44,7 @@ class SettingsDialog(QDialog):
         # Ses Seviyesi
         self.layout.addSpacing(8)
         volume_label = QLabel("Ses Seviyesi")
-        volume_label.setStyleSheet("font-weight: bold; color: #cdd6f4;")
+        volume_label.setStyleSheet("font-weight: bold; color: #f1dca7;")
         self.layout.addWidget(volume_label)
 
         volume_row = QHBoxLayout()
@@ -56,7 +56,7 @@ class SettingsDialog(QDialog):
         self.lbl_volume_pct = QLabel("100%")
         self.lbl_volume_pct.setFixedWidth(38)
         self.lbl_volume_pct.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.lbl_volume_pct.setStyleSheet("color: #cdd6f4;")
+        self.lbl_volume_pct.setStyleSheet("color: #f1dca7;")
 
         volume_row.addWidget(self.slider_volume)
         volume_row.addWidget(self.lbl_volume_pct)
@@ -67,12 +67,12 @@ class SettingsDialog(QDialog):
         # Güncellemeler
         self.layout.addSpacing(8)
         update_label = QLabel("Güncellemeler")
-        update_label.setStyleSheet("font-weight: bold; color: #cdd6f4;")
+        update_label.setStyleSheet("font-weight: bold; color: #f1dca7;")
         self.layout.addWidget(update_label)
 
         update_row = QHBoxLayout()
         self.lbl_version = QLabel(f"Sürüm: v{__version__}")
-        self.lbl_version.setStyleSheet("color: #cdd6f4;")
+        self.lbl_version.setStyleSheet("color: #f1dca7;")
         self.btn_update = QPushButton("Güncellemeleri Kontrol Et")
         self.btn_update.setCursor(Qt.PointingHandCursor)
         self.btn_update.clicked.connect(self.check_for_updates)
@@ -83,7 +83,7 @@ class SettingsDialog(QDialog):
 
         self.lbl_update_status = QLabel("")
         self.lbl_update_status.setWordWrap(True)
-        self.lbl_update_status.setStyleSheet("color: #a6adc8;")
+        self.lbl_update_status.setStyleSheet("color: #b8a99a;")
         self.layout.addWidget(self.lbl_update_status)
 
         self._worker = None
@@ -93,7 +93,7 @@ class SettingsDialog(QDialog):
         self.btn_save = QPushButton("Kaydet ve Kapat")
         self.btn_save.setCursor(Qt.PointingHandCursor)
         self.btn_save.clicked.connect(self.save_values)
-        self.btn_save.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold; padding: 8px;")
+        self.btn_save.setStyleSheet("background-color: #9b9b7a; color: #24201b; font-weight: bold; padding: 8px;")
         self.layout.addWidget(self.btn_save)
 
         # Mevcut değerleri yükle
