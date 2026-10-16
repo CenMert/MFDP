@@ -19,7 +19,7 @@ class TaskWindow(QDialog):
         
         self.setWindowTitle("Task Yönetimi - MFDP")
         self.resize(700, 600)
-        self.setStyleSheet("background-color: #1e1e2e; color: #cdd6f4;")
+        self.setStyleSheet("background-color: #24201b; color: #f1dca7;")
         
         # Non-modal yap - arka plandaki pencereyi kullanılabilir tut
         self.setModal(False)
@@ -30,7 +30,7 @@ class TaskWindow(QDialog):
         
         # Başlık
         title = QLabel("Task Yönetimi")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #a6e3a1; padding: 10px;")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #9b9b7a; padding: 10px;")
         main_layout.addWidget(title)
         
         # Ana içerik: Sol tarafta liste, sağ tarafta form
@@ -38,23 +38,23 @@ class TaskWindow(QDialog):
         
         # Sol: Task Listesi
         list_group = QGroupBox("Tasklar")
-        list_group.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #45475a; border-radius: 5px; margin-top: 30px; padding-top: 30px; }")
+        list_group.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #4a4238; border-radius: 5px; margin-top: 30px; padding-top: 30px; }")
         list_layout = QVBoxLayout()
         
         self.task_tree = QTreeWidget()
         self.task_tree.setHeaderLabel("Tasklar (Tag'a göre gruplanmış)")
         self.task_tree.setStyleSheet("""
             QTreeWidget {
-                background-color: #313244;
-                border: 1px solid #45475a;
+                background-color: #35302a;
+                border: 1px solid #4a4238;
                 border-radius: 5px;
-                color: #cdd6f4;
+                color: #f1dca7;
             }
             QTreeWidget::item {
                 padding: 5px;
             }
             QTreeWidget::item:selected {
-                background-color: #45475a;
+                background-color: #4a4238;
             }
         """)
         self.task_tree.itemClicked.connect(self.on_task_selected)
@@ -63,7 +63,7 @@ class TaskWindow(QDialog):
         
         # Aktif task butonu
         self.btn_set_active = QPushButton("Aktif Task Olarak Ayarla")
-        self.btn_set_active.setStyleSheet("background-color: #89b4fa; color: #1e1e2e; font-weight: bold;")
+        self.btn_set_active.setStyleSheet("background-color: #e8ac65; color: #24201b; font-weight: bold;")
         self.btn_set_active.clicked.connect(self.set_active_task)
         list_layout.addWidget(self.btn_set_active)
         
@@ -72,7 +72,7 @@ class TaskWindow(QDialog):
         
         # Sağ: Task Formu
         form_group = QGroupBox("Task Oluştur/Düzenle")
-        form_group.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #45475a; border-radius: 5px; margin-top: 30px; padding-top: 30px; }")
+        form_group.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #4a4238; border-radius: 5px; margin-top: 30px; padding-top: 30px; }")
         form_layout = QVBoxLayout()
         
         form = QFormLayout()
@@ -80,18 +80,18 @@ class TaskWindow(QDialog):
         
         self.input_name = QLineEdit()
         self.input_name.setPlaceholderText("Task adı")
-        self.input_name.setStyleSheet("background-color: #313244; border: 1px solid #45475a; border-radius: 5px; padding: 5px;")
+        self.input_name.setStyleSheet("background-color: #35302a; border: 1px solid #4a4238; border-radius: 5px; padding: 5px;")
         form.addRow("Task Adı:", self.input_name)
         
         self.input_tag = QLineEdit()
         self.input_tag.setPlaceholderText("Tag adı (örn: Ders, İş)")
-        self.input_tag.setStyleSheet("background-color: #313244; border: 1px solid #45475a; border-radius: 5px; padding: 5px;")
+        self.input_tag.setStyleSheet("background-color: #35302a; border: 1px solid #4a4238; border-radius: 5px; padding: 5px;")
         form.addRow("Tag:", self.input_tag)
         
         # Süre seçimi
         duration_layout = QHBoxLayout()
         self.chk_has_duration = QCheckBox("Belirli süre ata")
-        self.chk_has_duration.setStyleSheet("color: #bac2de;")
+        self.chk_has_duration.setStyleSheet("color: #d2c2a8;")
         self.chk_has_duration.toggled.connect(self.on_duration_toggled)
         duration_layout.addWidget(self.chk_has_duration)
         
@@ -101,18 +101,18 @@ class TaskWindow(QDialog):
         self.input_duration.setValue(25)
         self.input_duration.setSuffix(" dakika")
         self.input_duration.setEnabled(False)
-        self.input_duration.setStyleSheet("background-color: #313244; border: 1px solid #45475a; border-radius: 5px; padding: 5px;")
+        self.input_duration.setStyleSheet("background-color: #35302a; border: 1px solid #4a4238; border-radius: 5px; padding: 5px;")
         duration_layout.addWidget(self.input_duration)
         form.addRow("Süre:", duration_layout)
         
         # Tag renk seçici
         color_layout = QHBoxLayout()
         self.btn_color = QPushButton("Renk Seç")
-        self.btn_color.setStyleSheet("background-color: #313244; border: 1px solid #45475a; border-radius: 5px; padding: 5px;")
+        self.btn_color.setStyleSheet("background-color: #35302a; border: 1px solid #4a4238; border-radius: 5px; padding: 5px;")
         self.btn_color.clicked.connect(self.select_tag_color)
         self.color_preview = QLabel("")
         self.color_preview.setFixedSize(30, 30)
-        self.color_preview.setStyleSheet("border: 1px solid #45475a; border-radius: 3px;")
+        self.color_preview.setStyleSheet("border: 1px solid #4a4238; border-radius: 3px;")
         self.selected_color = None
         color_layout.addWidget(self.btn_color)
         color_layout.addWidget(self.color_preview)
@@ -125,17 +125,17 @@ class TaskWindow(QDialog):
         btn_layout = QHBoxLayout()
         
         self.btn_save = QPushButton("Kaydet")
-        self.btn_save.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
+        self.btn_save.setStyleSheet("background-color: #9b9b7a; color: #24201b; font-weight: bold;")
         self.btn_save.clicked.connect(self.save_task)
         btn_layout.addWidget(self.btn_save)
         
         self.btn_delete = QPushButton("Sil")
-        self.btn_delete.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold;")
+        self.btn_delete.setStyleSheet("background-color: #d08c60; color: #24201b; font-weight: bold;")
         self.btn_delete.clicked.connect(self.delete_task)
         btn_layout.addWidget(self.btn_delete)
         
         self.btn_clear = QPushButton("Temizle")
-        self.btn_clear.setStyleSheet("background-color: #45475a; color: #cdd6f4;")
+        self.btn_clear.setStyleSheet("background-color: #4a4238; color: #f1dca7;")
         self.btn_clear.clicked.connect(self.clear_form)
         btn_layout.addWidget(self.btn_clear)
         
@@ -150,7 +150,7 @@ class TaskWindow(QDialog):
         bottom_layout.addStretch()
         
         self.btn_close = QPushButton("Kapat")
-        self.btn_close.setStyleSheet("background-color: #45475a; color: #cdd6f4;")
+        self.btn_close.setStyleSheet("background-color: #4a4238; color: #f1dca7;")
         self.btn_close.clicked.connect(self.accept)
         bottom_layout.addWidget(self.btn_close)
         
@@ -174,7 +174,7 @@ class TaskWindow(QDialog):
         color = QColorDialog.getColor()
         if color.isValid():
             self.selected_color = color.name()
-            self.color_preview.setStyleSheet(f"background-color: {self.selected_color}; border: 1px solid #45475a; border-radius: 3px;")
+            self.color_preview.setStyleSheet(f"background-color: {self.selected_color}; border: 1px solid #4a4238; border-radius: 3px;")
     
     def refresh_task_list(self):
         """Task listesini yenile."""
@@ -194,7 +194,7 @@ class TaskWindow(QDialog):
         for tag, tag_tasks in tasks_by_tag.items():
             # Tag için renk al
             tag_info = next((t for t in self.task_manager.get_all_tags() if t['name'] == tag), None)
-            tag_color = tag_info['color'] if tag_info and tag_info.get('color') else '#89b4fa'
+            tag_color = tag_info['color'] if tag_info and tag_info.get('color') else '#e8ac65'
             
             # Tag item'ı
             tag_item = QTreeWidgetItem(self.task_tree)
@@ -212,7 +212,7 @@ class TaskWindow(QDialog):
                 
                 # Aktif task'ı vurgula
                 if self.task_manager.get_active_task_id() == task.id:
-                    task_item.setForeground(0, QColor("#a6e3a1"))
+                    task_item.setForeground(0, QColor("#9b9b7a"))
                     task_item.setText(0, f"▶ {task.name}{duration_text}")
     
     def on_task_selected(self, item, column):
@@ -239,10 +239,10 @@ class TaskWindow(QDialog):
         tag_info = next((t for t in self.task_manager.get_all_tags() if t['name'] == task.tag), None)
         if tag_info and tag_info.get('color'):
             self.selected_color = tag_info['color']
-            self.color_preview.setStyleSheet(f"background-color: {self.selected_color}; border: 1px solid #45475a; border-radius: 3px;")
+            self.color_preview.setStyleSheet(f"background-color: {self.selected_color}; border: 1px solid #4a4238; border-radius: 3px;")
         else:
             self.selected_color = None
-            self.color_preview.setStyleSheet("border: 1px solid #45475a; border-radius: 3px;")
+            self.color_preview.setStyleSheet("border: 1px solid #4a4238; border-radius: 3px;")
     
     def save_task(self):
         """Task kaydet."""
@@ -337,6 +337,6 @@ class TaskWindow(QDialog):
         self.chk_has_duration.setChecked(False)
         self.input_duration.setValue(25)
         self.selected_color = None
-        self.color_preview.setStyleSheet("border: 1px solid #45475a; border-radius: 3px;")
+        self.color_preview.setStyleSheet("border: 1px solid #4a4238; border-radius: 3px;")
         self.task_tree.clearSelection()
 

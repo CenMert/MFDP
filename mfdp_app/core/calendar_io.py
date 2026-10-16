@@ -11,7 +11,7 @@ import re
 from typing import Dict, List, Tuple
 
 EVENT_KINDS = ("sinav", "odev", "toplanti", "diger")
-DEFAULT_RANGE_COLOR = "#a6e3a1"
+DEFAULT_RANGE_COLOR = "#9b9b7a"
 
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 _TIME = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -24,7 +24,7 @@ AI_PROMPT = """Sen bir takvim dönüştürücüsüsün. Aşağıda vereceğim do
     {"title": "Fizik kısa sınav", "date": "2026-10-05", "time": "09:30", "kind": "sinav", "note": "Bölüm 1-3"}
   ],
   "ranges": [
-    {"label": "Sınav haftası", "start_date": "2026-10-12", "end_date": "2026-10-21", "color": "#fab387"}
+    {"label": "Sınav haftası", "start_date": "2026-10-12", "end_date": "2026-10-21", "color": "#d9ae94"}
   ]
 }
 
@@ -34,7 +34,7 @@ AI_PROMPT = """Sen bir takvim dönüştürücüsüsün. Aşağıda vereceğim do
 - "time": HH:MM (24 saat) ya da null. Saat belli değilse null yaz, uydurma.
 - "kind" yalnızca şunlardan biri: "sinav", "odev", "toplanti", "diger". Emin değilsen "diger" yaz.
 - "note": isteğe bağlı kısa metin ya da null.
-- "color": "#rrggbb" biçiminde. Emin değilsen "#a6e3a1" kullan.
+- "color": "#rrggbb" biçiminde. Emin değilsen "#9b9b7a" kullan.
 - "end_date" asla "start_date"ten önce olamaz.
 - Ders programı (haftalık ders saatleri) EKLEME. Sadece sınav, ödev, toplantı ve tarih aralıklarını al.
 

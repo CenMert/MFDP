@@ -103,15 +103,15 @@ class MainWindow(QMainWindow):
         self.btn_toggle_mode.clicked.connect(self.toggle_timer_mode)
         self.btn_toggle_mode.setStyleSheet("""
             QPushButton {
-                background-color: #45475a;
-                color: #cdd6f4;
-                border: 1px solid #585b70;
+                background-color: #4a4238;
+                color: #f1dca7;
+                border: 1px solid #5e5448;
                 border-radius: 5px;
                 font-size: 11px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #585b70;
+                background-color: #5e5448;
             }
         """)
         top_layout.addWidget(self.btn_toggle_mode)
@@ -140,9 +140,9 @@ class MainWindow(QMainWindow):
         self.btn_tag.setStyleSheet("""
             font-size: 12px; 
             font-weight: bold; 
-            color: #cdd6f4; 
-            background-color: #313244; 
-            border: 1px solid #45475a; 
+            color: #f1dca7; 
+            background-color: #35302a; 
+            border: 1px solid #4a4238; 
             border-radius: 5px; 
             padding: 5px 10px;
         """)
@@ -151,9 +151,9 @@ class MainWindow(QMainWindow):
         self.btn_task_name.setEnabled(False)  # Tıklanamaz
         self.btn_task_name.setStyleSheet("""
             font-size: 14px; 
-            color: #bac2de; 
-            background-color: #313244; 
-            border: 1px solid #45475a; 
+            color: #d2c2a8; 
+            background-color: #35302a; 
+            border: 1px solid #4a4238; 
             border-radius: 5px; 
             padding: 5px 15px;
         """)
@@ -222,7 +222,7 @@ class MainWindow(QMainWindow):
         self.btn_complete_countup.setCursor(Qt.PointingHandCursor)
         self.btn_complete_countup.clicked.connect(self.complete_timer_countup)
         self.btn_complete_countup.setMinimumHeight(60)
-        self.btn_complete_countup.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
+        self.btn_complete_countup.setStyleSheet("background-color: #9b9b7a; color: #24201b; font-weight: bold;")
         self.btn_complete_countup.setVisible(False)
         btn_layout_countup.addWidget(self.btn_complete_countup)
         main_layout.addLayout(btn_layout_countup)
@@ -259,7 +259,7 @@ class MainWindow(QMainWindow):
         self.btn_dnd.setCursor(Qt.PointingHandCursor)
         self.btn_dnd.setFixedWidth(40)
         self.btn_dnd.setToolTip("Rahatsız Etme'yi şimdi aç/kapat (Ctrl+D)")
-        self.btn_dnd.setStyleSheet("QPushButton#DNDButton:checked { background-color: #f38ba8; color: #1e1e2e; }")
+        self.btn_dnd.setStyleSheet("QPushButton#DNDButton:checked { background-color: #d08c60; color: #24201b; }")
         self.btn_dnd.setEnabled(self.dnd_manager.is_available)
         self.btn_dnd.clicked.connect(self.toggle_dnd_manual)
         settings_layout.addWidget(self.btn_dnd)
@@ -269,7 +269,7 @@ class MainWindow(QMainWindow):
         self.btn_tasks.setCursor(Qt.PointingHandCursor)
         self.btn_tasks.clicked.connect(self.open_tasks)
         self.btn_tasks.setFixedWidth(100)
-        self.btn_tasks.setStyleSheet("background-color: #cba6f7; color: #1e1e2e; font-weight: bold; border: none;")
+        self.btn_tasks.setStyleSheet("background-color: #997b66; color: #24201b; font-weight: bold; border: none;")
         settings_layout.addWidget(self.btn_tasks)
 
         settings_layout.addSpacing(10)
@@ -279,7 +279,7 @@ class MainWindow(QMainWindow):
         self.btn_recursive_tasks.setCursor(Qt.PointingHandCursor)
         self.btn_recursive_tasks.clicked.connect(self.open_recursive_tasks)
         self.btn_recursive_tasks.setFixedWidth(180)
-        self.btn_recursive_tasks.setStyleSheet("background-color: #f9e2af; color: #1e1e2e; font-weight: bold; border: none;")
+        self.btn_recursive_tasks.setStyleSheet("background-color: #ffcb69; color: #24201b; font-weight: bold; border: none;")
         settings_layout.addWidget(self.btn_recursive_tasks)
 
         settings_layout.addSpacing(10)
@@ -289,7 +289,7 @@ class MainWindow(QMainWindow):
         self.btn_stats.setCursor(Qt.PointingHandCursor)
         self.btn_stats.clicked.connect(self.open_stats)
         self.btn_stats.setFixedWidth(100)
-        self.btn_stats.setStyleSheet("background-color: #89b4fa; color: #1e1e2e; font-weight: bold; border: none;")
+        self.btn_stats.setStyleSheet("background-color: #e8ac65; color: #24201b; font-weight: bold; border: none;")
         settings_layout.addWidget(self.btn_stats)
 
         settings_layout.addSpacing(10)
@@ -299,7 +299,7 @@ class MainWindow(QMainWindow):
         self.btn_calendar.setCursor(Qt.PointingHandCursor)
         self.btn_calendar.clicked.connect(self.open_calendar)
         self.btn_calendar.setFixedWidth(100)
-        self.btn_calendar.setStyleSheet("background-color: #94e2d5; color: #1e1e2e; font-weight: bold; border: none;")
+        self.btn_calendar.setStyleSheet("background-color: #797d62; color: #24201b; font-weight: bold; border: none;")
         settings_layout.addWidget(self.btn_calendar)
 
         settings_layout.addSpacing(10)
@@ -458,7 +458,7 @@ class MainWindow(QMainWindow):
                     self.btn_tag.setStyleSheet(f"""
                         font-size: 12px; 
                         font-weight: bold; 
-                        color: #1e1e2e; 
+                        color: #24201b; 
                         background-color: {tag_color}; 
                         border: 1px solid {tag_color}; 
                         border-radius: 5px; 
@@ -469,9 +469,9 @@ class MainWindow(QMainWindow):
                     self.btn_tag.setStyleSheet("""
                         font-size: 12px; 
                         font-weight: bold; 
-                        color: #cdd6f4; 
-                        background-color: #313244; 
-                        border: 1px solid #45475a; 
+                        color: #f1dca7; 
+                        background-color: #35302a; 
+                        border: 1px solid #4a4238; 
                         border-radius: 5px; 
                         padding: 0px 10px;
                     """)

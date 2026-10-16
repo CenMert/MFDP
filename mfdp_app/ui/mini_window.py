@@ -32,11 +32,11 @@ class MiniWindow(QWidget):
 
         self.lbl_time = QLabel("00:00")
         self.lbl_time.setStyleSheet(
-            "color: #cdd6f4; font-size: 26px; font-weight: bold; background: transparent;")
+            "color: #f1dca7; font-size: 26px; font-weight: bold; background: transparent;")
         layout.addWidget(self.lbl_time)
 
         self.setStyleSheet(
-            "MiniWindow { background-color: #1e1e2e; border: 1px solid #45475a; border-radius: 10px; }")
+            "MiniWindow { background-color: #24201b; border: 1px solid #4a4238; border-radius: 10px; }")
         self.set_color(None)
 
     def set_time(self, text):
@@ -44,7 +44,7 @@ class MiniWindow(QWidget):
 
     def set_color(self, color):
         """Görev rengi; None ise nötr gri."""
-        c = color or "#585b70"
+        c = color or "#5e5448"
         self.dot.setStyleSheet(f"background-color: {c}; border-radius: 7px;")
 
     def showEvent(self, event):
@@ -62,7 +62,7 @@ class MiniWindow(QWidget):
 
     def set_paused(self, paused):
         """Duraklatılmışsa süreyi soluk göster."""
-        color = "#6c7086" if paused else "#cdd6f4"
+        color = "#7a6e60" if paused else "#f1dca7"
         self.lbl_time.setStyleSheet(
             f"color: {color}; font-size: 26px; font-weight: bold; background: transparent;")
 

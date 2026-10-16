@@ -11,20 +11,20 @@ from mfdp_app.core import calendar_io
 from mfdp_app.db.calendar_repository import CalendarRepository
 
 # Catppuccin Mocha
-BASE, SURFACE, OVERLAY, TEXT, SUBTEXT = "#1e1e2e", "#313244", "#45475a", "#cdd6f4", "#a6adc8"
+BASE, SURFACE, OVERLAY, TEXT, SUBTEXT = "#24201b", "#35302a", "#4a4238", "#f1dca7", "#b8a99a"
 
 EVENT_KINDS = {
-    "sinav": ("Sınav", "#f38ba8"),
-    "odev": ("Ödev", "#f9e2af"),
-    "toplanti": ("Toplantı", "#89b4fa"),
-    "diger": ("Diğer", "#cba6f7"),
+    "sinav": ("Sınav", "#d08c60"),
+    "odev": ("Ödev", "#ffcb69"),
+    "toplanti": ("Toplantı", "#e8ac65"),
+    "diger": ("Diğer", "#997b66"),
 }
 RANGE_COLORS = {
-    "Yeşil": "#a6e3a1",
-    "Turuncu": "#fab387",
-    "Turkuaz": "#94e2d5",
-    "Pembe": "#f5c2e7",
-    "Mavi": "#89b4fa",
+    "Yeşil": "#9b9b7a",
+    "Turuncu": "#d9ae94",
+    "Turkuaz": "#797d62",
+    "Pembe": "#b58463",
+    "Mavi": "#e8ac65",
 }
 WEEKDAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
 MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz",
@@ -146,7 +146,7 @@ class MonthGrid(QWidget):
             p.setFont(self.font())
             if d == today:
                 p.setPen(Qt.NoPen)
-                p.setBrush(QColor("#a6e3a1"))
+                p.setBrush(QColor("#9b9b7a"))
                 p.drawEllipse(rect.left() + 4, rect.top() + 2, 20, 20)
                 p.setPen(QColor(BASE))
             else:
@@ -179,7 +179,7 @@ class MonthGrid(QWidget):
             if lane >= MAX_LANES:
                 continue
             rs, re_ = _parse(r["start_date"]), _parse(r["end_date"])
-            color = QColor(r["color"] or "#a6e3a1")
+            color = QColor(r["color"] or "#9b9b7a")
             for row in range(self._rows):
                 row_start = self._grid_start + datetime.timedelta(days=row * 7)
                 row_end = row_start + datetime.timedelta(days=6)

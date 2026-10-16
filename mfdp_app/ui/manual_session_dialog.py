@@ -39,15 +39,15 @@ def _time_from_offset(off: int) -> QTime:
 class TimePickerPopup(QFrame):
     """Click-to-pick popup: hour grid (0-23) then minute grid (5-min steps)."""
 
-    _BTN = ("QPushButton { background-color: #313244; padding: 5px 0; min-width: 30px; }"
-            "QPushButton:hover { background-color: #585b70; }"
-            "QPushButton:checked { background-color: #89b4fa; color: #1e1e2e; font-weight: bold; }")
+    _BTN = ("QPushButton { background-color: #35302a; padding: 5px 0; min-width: 30px; }"
+            "QPushButton:hover { background-color: #5e5448; }"
+            "QPushButton:checked { background-color: #e8ac65; color: #24201b; font-weight: bold; }")
 
     def __init__(self, time_edit: QTimeEdit, parent=None):
         super().__init__(parent, Qt.Popup)
         self.time_edit = time_edit
-        self.setStyleSheet("QFrame { background-color: #1e1e2e; border: 1px solid #45475a; }"
-                           "QLabel { border: none; color: #a6adc8; }")
+        self.setStyleSheet("QFrame { background-color: #24201b; border: 1px solid #4a4238; }"
+                           "QLabel { border: none; color: #b8a99a; }")
         lay = QVBoxLayout(self)
         lay.addWidget(QLabel("Saat"))
         self.hour_btns = self._grid(lay, range(24), 6, lambda v: f"{v:02d}", self._pick_hour)
@@ -95,20 +95,20 @@ class ManualSessionDialog(QDialog):
         self.setWindowTitle("Oturum Ekle")
         self.setMinimumWidth(380)
         self.setStyleSheet("""
-            QDialog { background-color: #1e1e2e; color: #cdd6f4; }
-            QLabel { color: #cdd6f4; }
+            QDialog { background-color: #24201b; color: #f1dca7; }
+            QLabel { color: #f1dca7; }
             QComboBox, QDateEdit, QTimeEdit, QSpinBox {
-                background-color: #313244; color: #cdd6f4; border: 1px solid #45475a;
+                background-color: #35302a; color: #f1dca7; border: 1px solid #4a4238;
                 border-radius: 4px; padding: 4px;
             }
-            QPushButton { background-color: #45475a; color: #cdd6f4; border: none;
+            QPushButton { background-color: #4a4238; color: #f1dca7; border: none;
                           border-radius: 6px; padding: 7px 14px; }
-            QPushButton:hover { background-color: #585b70; }
-            QPushButton#primary { background-color: #a6e3a1; color: #1e1e2e; font-weight: bold; }
-            QPushButton#primary:hover { background-color: #94d990; }
-            QSlider::groove:horizontal { height: 6px; background: #45475a; border-radius: 3px; }
-            QSlider::sub-page:horizontal { background: #89b4fa; border-radius: 3px; }
-            QSlider::handle:horizontal { background: #cdd6f4; width: 16px; margin: -5px 0; border-radius: 8px; }
+            QPushButton:hover { background-color: #5e5448; }
+            QPushButton#primary { background-color: #9b9b7a; color: #24201b; font-weight: bold; }
+            QPushButton#primary:hover { background-color: #baa587; }
+            QSlider::groove:horizontal { height: 6px; background: #4a4238; border-radius: 3px; }
+            QSlider::sub-page:horizontal { background: #e8ac65; border-radius: 3px; }
+            QSlider::handle:horizontal { background: #f1dca7; width: 16px; margin: -5px 0; border-radius: 8px; }
         """)
 
         self._detailed = False
@@ -181,7 +181,7 @@ class ManualSessionDialog(QDialog):
         root.addWidget(self.detail_box)
 
         self.summary_label = QLabel()
-        self.summary_label.setStyleSheet("color: #a6adc8;")
+        self.summary_label.setStyleSheet("color: #b8a99a;")
         root.addWidget(self.summary_label)
 
         buttons = QHBoxLayout()
@@ -215,9 +215,9 @@ class ManualSessionDialog(QDialog):
         btn = QToolButton()
         btn.setText("🕒")
         btn.setToolTip("Saati tıklayarak seç")
-        btn.setStyleSheet("QToolButton { background-color: #313244; border: 1px solid #45475a;"
+        btn.setStyleSheet("QToolButton { background-color: #35302a; border: 1px solid #4a4238;"
                           " border-radius: 4px; padding: 3px 6px; }"
-                          "QToolButton:hover { background-color: #45475a; }")
+                          "QToolButton:hover { background-color: #4a4238; }")
         popup = TimePickerPopup(edit, self)
         btn.clicked.connect(lambda: popup.popup_at(btn))
         h.addWidget(edit, 1)

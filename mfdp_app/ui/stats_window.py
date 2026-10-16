@@ -16,7 +16,7 @@ class StatsWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Verimlilik Analizi - MFDP")
         self.resize(700, 800)
-        self.setStyleSheet("background-color: #1e1e2e; color: #cdd6f4;")
+        self.setStyleSheet("background-color: #24201b; color: #f1dca7;")
         
         # Non-modal yap - arka plandaki pencereyi kullanılabilir tut
         self.setModal(False)
@@ -46,11 +46,11 @@ class StatsWindow(QDialog):
         # Tab widget for lazy chart loading
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #45475a; background-color: #1e1e2e; }
-            QTabBar::tab { background: #313244; color: #bac2de; padding: 8px 16px; 
-                           border: 1px solid #45475a; border-bottom: none; border-radius: 4px 4px 0 0; margin-right: 2px; }
-            QTabBar::tab:selected { background: #45475a; color: #cdd6f4; font-weight: bold; }
-            QTabBar::tab:hover { background: #585b70; }
+            QTabWidget::pane { border: 1px solid #4a4238; background-color: #24201b; }
+            QTabBar::tab { background: #35302a; color: #d2c2a8; padding: 8px 16px; 
+                           border: 1px solid #4a4238; border-bottom: none; border-radius: 4px 4px 0 0; margin-right: 2px; }
+            QTabBar::tab:selected { background: #4a4238; color: #f1dca7; font-weight: bold; }
+            QTabBar::tab:hover { background: #5e5448; }
         """)
         main_layout.addWidget(self.tabs)
 
@@ -81,9 +81,9 @@ class StatsWindow(QDialog):
         self.add_session_btn = QPushButton("＋ Oturum Ekle")
         self.add_session_btn.setToolTip("Evde değilken yaptığın çalışmayı elle ekle")
         self.add_session_btn.setStyleSheet(
-            "QPushButton { background-color: #313244; color: #a6e3a1; border: 1px solid #45475a;"
+            "QPushButton { background-color: #35302a; color: #9b9b7a; border: 1px solid #4a4238;"
             " border-radius: 6px; padding: 8px 16px; font-weight: bold; }"
-            "QPushButton:hover { background-color: #45475a; }")
+            "QPushButton:hover { background-color: #4a4238; }")
         self.add_session_btn.clicked.connect(self._open_manual_session)
         footer.addWidget(self.add_session_btn)
         footer.addStretch()
@@ -130,7 +130,7 @@ class StatsWindow(QDialog):
     def init_header(self, parent_layout):
         lbl = QLabel(self._header_text())
         self._header_label = lbl
-        lbl.setStyleSheet("font-size: 18px; font-weight: bold; color: #a6e3a1; padding: 10px; background-color: #313244; border-radius: 8px;")
+        lbl.setStyleSheet("font-size: 18px; font-weight: bold; color: #9b9b7a; padding: 10px; background-color: #35302a; border-radius: 8px;")
         lbl.setAlignment(Qt.AlignCenter)
         parent_layout.addWidget(lbl)
 
@@ -158,7 +158,7 @@ class StatsWindow(QDialog):
     # =========================================================================
 
     def _create_figure(self, figsize=(6, 4)):
-        fig = Figure(figsize=figsize, dpi=100, facecolor='#1e1e2e')
+        fig = Figure(figsize=figsize, dpi=100, facecolor='#24201b')
         self._active_figures.append(fig)
         return fig
 
@@ -168,17 +168,17 @@ class StatsWindow(QDialog):
         return canvas
 
     def _setup_ax(self, ax, title, xlabel, ylabel):
-        ax.set_facecolor('#1e1e2e')
-        ax.set_title(title, color='#cdd6f4', fontsize=12, pad=15)
-        ax.set_xlabel(xlabel, color='#bac2de')
-        ax.set_ylabel(ylabel, color='#bac2de')
-        ax.tick_params(axis='x', colors='#bac2de', rotation=45)
-        ax.tick_params(axis='y', colors='#bac2de')
+        ax.set_facecolor('#24201b')
+        ax.set_title(title, color='#f1dca7', fontsize=12, pad=15)
+        ax.set_xlabel(xlabel, color='#d2c2a8')
+        ax.set_ylabel(ylabel, color='#d2c2a8')
+        ax.tick_params(axis='x', colors='#d2c2a8', rotation=45)
+        ax.tick_params(axis='y', colors='#d2c2a8')
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_color('#45475a')
-        ax.spines['left'].set_color('#45475a')
-        ax.grid(color='#45475a', linestyle='--', linewidth=0.5, alpha=0.5)
+        ax.spines['bottom'].set_color('#4a4238')
+        ax.spines['left'].set_color('#4a4238')
+        ax.grid(color='#4a4238', linestyle='--', linewidth=0.5, alpha=0.5)
 
     # =========================================================================
     # CHART BUILDERS (called lazily per-tab)
@@ -191,14 +191,14 @@ class StatsWindow(QDialog):
 
         fig = self._create_figure()
         ax = fig.add_subplot(111)
-        bars = ax.bar(days, minutes, color='#89b4fa', width=0.6, alpha=0.8)
+        bars = ax.bar(days, minutes, color='#e8ac65', width=0.6, alpha=0.8)
         self._setup_ax(ax, "Son 7 Günlük Trend (Toplam)", "Günler", "Dakika")
 
         for bar in bars:
             height = bar.get_height()
             if height > 0:
                 ax.text(bar.get_x() + bar.get_width()/2., height, f'{int(height)}',
-                        ha='center', va='bottom', color='#cdd6f4', fontsize=8)
+                        ha='center', va='bottom', color='#f1dca7', fontsize=8)
         fig.tight_layout()
         self._add_canvas(layout, fig)
     
@@ -231,7 +231,7 @@ class StatsWindow(QDialog):
         
         # Tag renklerini al
         tag_colors = {}
-        default_colors = ['#89b4fa', '#a6e3a1', '#f9e2af', '#f38ba8', '#cba6f7', '#fab387', '#94e2d5', '#f5c2e7']
+        default_colors = ['#e8ac65', '#9b9b7a', '#ffcb69', '#d08c60', '#997b66', '#d9ae94', '#797d62', '#b58463']
         for i, tag_info in enumerate(tags):
             tag = tag_info['name']
             tag_colors[tag] = tag_info.get('color') or default_colors[i % len(default_colors)]
@@ -249,21 +249,21 @@ class StatsWindow(QDialog):
             for j, (bar, val) in enumerate(zip(bars, minutes)):
                 if val > 0:
                     ax.text(bar.get_x() + bar.get_width()/2., val, f'{int(val)}',
-                           ha='center', va='bottom', color='#cdd6f4', fontsize=7)
+                           ha='center', va='bottom', color='#f1dca7', fontsize=7)
         
-        ax.set_xlabel("Günler", color='#bac2de')
-        ax.set_ylabel("Dakika", color='#bac2de')
-        ax.set_title("Son 7 Günlük Trend (Tag Bazlı)", color='#cdd6f4', fontsize=12, pad=15)
+        ax.set_xlabel("Günler", color='#d2c2a8')
+        ax.set_ylabel("Dakika", color='#d2c2a8')
+        ax.set_title("Son 7 Günlük Trend (Tag Bazlı)", color='#f1dca7', fontsize=12, pad=15)
         ax.set_xticks(x)
-        ax.set_xticklabels(days, rotation=45, color='#bac2de')
-        ax.tick_params(axis='y', colors='#bac2de')
-        ax.legend(loc='upper left', facecolor='#313244', edgecolor='#45475a', labelcolor='#cdd6f4')
-        ax.set_facecolor('#1e1e2e')
+        ax.set_xticklabels(days, rotation=45, color='#d2c2a8')
+        ax.tick_params(axis='y', colors='#d2c2a8')
+        ax.legend(loc='upper left', facecolor='#35302a', edgecolor='#4a4238', labelcolor='#f1dca7')
+        ax.set_facecolor('#24201b')
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_color('#45475a')
-        ax.spines['left'].set_color('#45475a')
-        ax.grid(color='#45475a', linestyle='--', linewidth=0.5, alpha=0.5, axis='y')
+        ax.spines['bottom'].set_color('#4a4238')
+        ax.spines['left'].set_color('#4a4238')
+        ax.grid(color='#4a4238', linestyle='--', linewidth=0.5, alpha=0.5, axis='y')
         
         fig.tight_layout()
         self._add_canvas(layout, fig)
@@ -282,7 +282,7 @@ class StatsWindow(QDialog):
             if total_minutes > 0:
                 tag_times[tag] = {
                     'minutes': total_minutes,
-                    'color': tag_info.get('color') or '#89b4fa'
+                    'color': tag_info.get('color') or '#e8ac65'
                 }
         
         if not tag_times:
@@ -298,10 +298,10 @@ class StatsWindow(QDialog):
         
         ax.pie(sizes, labels=labels, autopct='%1.1f%%',
                startangle=90, colors=colors,
-               textprops=dict(color="#cdd6f4"))
+               textprops=dict(color="#f1dca7"))
         
-        ax.set_title("Tag Bazlı Zaman Dağılımı", color='#cdd6f4', fontsize=12)
-        fig.patch.set_facecolor('#1e1e2e')
+        ax.set_title("Tag Bazlı Zaman Dağılımı", color='#f1dca7', fontsize=12)
+        fig.patch.set_facecolor('#24201b')
         
         fig.tight_layout()
         self._add_canvas(layout, fig)
@@ -312,8 +312,8 @@ class StatsWindow(QDialog):
         
         fig = self._create_figure()
         ax = fig.add_subplot(111)
-        ax.fill_between(hours, hours_data, color='#a6e3a1', alpha=0.2)
-        ax.plot(hours, hours_data, color='#a6e3a1', linewidth=2, marker='o', markersize=4)
+        ax.fill_between(hours, hours_data, color='#9b9b7a', alpha=0.2)
+        ax.plot(hours, hours_data, color='#9b9b7a', linewidth=2, marker='o', markersize=4)
         self._setup_ax(ax, "Saatlik Verimlilik", "Saat (00-23)", "Toplam Dakika")
         ax.set_xticks(range(0, 24, 3))
         fig.tight_layout()
@@ -321,12 +321,12 @@ class StatsWindow(QDialog):
 
     def _build_atomic_heatmap_section(self, layout):
         lbl = QLabel("Atomic Olay Isı Haritası (Son 14 Gün)")
-        lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #cdd6f4;")
+        lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #f1dca7;")
         layout.addWidget(lbl)
 
         # Filter dropdown
         self.atomic_filter = QComboBox()
-        self.atomic_filter.setStyleSheet("background-color: #313244; color: #cdd6f4; padding: 6px;")
+        self.atomic_filter.setStyleSheet("background-color: #35302a; color: #f1dca7; padding: 6px;")
         for label, _ in self.atomic_filter_options:
             self.atomic_filter.addItem(label)
         self.atomic_filter.currentIndexChanged.connect(self._render_atomic_heatmap)
@@ -358,7 +358,7 @@ class StatsWindow(QDialog):
         # No data case
         if not matrix or not day_labels:
             self.atomic_no_data_label = QLabel("Görüntülenecek veri yok.")
-            self.atomic_no_data_label.setStyleSheet("color: #bac2de; padding: 8px;")
+            self.atomic_no_data_label.setStyleSheet("color: #d2c2a8; padding: 8px;")
             self.atomic_heatmap_layout.addWidget(self.atomic_no_data_label)
             return
 
@@ -372,55 +372,55 @@ class StatsWindow(QDialog):
         im = ax1.imshow(data, aspect='auto', cmap='YlOrRd', origin='upper', interpolation='nearest')
 
         ax1.set_yticks(range(len(day_labels)))
-        ax1.set_yticklabels(day_labels, color='#bac2de', fontsize=9)
+        ax1.set_yticklabels(day_labels, color='#d2c2a8', fontsize=9)
         ax1.set_xticks(range(0, 24, 2))
-        ax1.set_xticklabels([f"{h:02d}:00" for h in range(0, 24, 2)], color='#bac2de', fontsize=8, rotation=45)
-        ax1.set_xlabel("Saat", color='#bac2de', fontsize=10)
-        ax1.set_ylabel("Gün", color='#bac2de', fontsize=10)
-        ax1.set_title("Saatlik Olay Dağılımı", color='#cdd6f4', fontsize=12, pad=12, fontweight='bold')
-        ax1.tick_params(axis='both', colors='#bac2de')
+        ax1.set_xticklabels([f"{h:02d}:00" for h in range(0, 24, 2)], color='#d2c2a8', fontsize=8, rotation=45)
+        ax1.set_xlabel("Saat", color='#d2c2a8', fontsize=10)
+        ax1.set_ylabel("Gün", color='#d2c2a8', fontsize=10)
+        ax1.set_title("Saatlik Olay Dağılımı", color='#f1dca7', fontsize=12, pad=12, fontweight='bold')
+        ax1.tick_params(axis='both', colors='#d2c2a8')
         ax1.spines['top'].set_visible(False)
         ax1.spines['right'].set_visible(False)
-        ax1.spines['bottom'].set_color('#45475a')
-        ax1.spines['left'].set_color('#45475a')
+        ax1.spines['bottom'].set_color('#4a4238')
+        ax1.spines['left'].set_color('#4a4238')
 
         cbar = fig.colorbar(im, ax=ax1, shrink=0.8)
-        cbar.ax.yaxis.set_tick_params(color='#bac2de')
-        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='#bac2de')
-        cbar.set_label("Olay Sayısı", color='#bac2de')
+        cbar.ax.yaxis.set_tick_params(color='#d2c2a8')
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='#d2c2a8')
+        cbar.set_label("Olay Sayısı", color='#d2c2a8')
 
         # Right: Hourly Summary (Bar chart)
         ax2 = fig.add_subplot(122)
         hourly_totals = np.sum(data, axis=0)
         hours = np.arange(24)
         
-        bars = ax2.bar(hours, hourly_totals, color='#f38ba8', alpha=0.7, edgecolor='#f5c2e7', linewidth=1.5)
+        bars = ax2.bar(hours, hourly_totals, color='#d08c60', alpha=0.7, edgecolor='#b58463', linewidth=1.5)
         
         # Highlight top 3 hours
         top_3_indices = np.argsort(hourly_totals)[-3:]
         for i in top_3_indices:
-            bars[i].set_color('#f9e2af')
-            bars[i].set_edgecolor('#f9e2af')
+            bars[i].set_color('#ffcb69')
+            bars[i].set_edgecolor('#ffcb69')
         
-        ax2.set_xlabel("Saat", color='#bac2de', fontsize=10)
-        ax2.set_ylabel("Toplam Olay", color='#bac2de', fontsize=10)
-        ax2.set_title("Saat Bazlı Toplam Olay", color='#cdd6f4', fontsize=12, pad=12, fontweight='bold')
+        ax2.set_xlabel("Saat", color='#d2c2a8', fontsize=10)
+        ax2.set_ylabel("Toplam Olay", color='#d2c2a8', fontsize=10)
+        ax2.set_title("Saat Bazlı Toplam Olay", color='#f1dca7', fontsize=12, pad=12, fontweight='bold')
         ax2.set_xticks(range(0, 24, 3))
-        ax2.set_xticklabels([f"{h:02d}" for h in range(0, 24, 3)], color='#bac2de', fontsize=9)
-        ax2.tick_params(axis='y', colors='#bac2de')
-        ax2.set_facecolor('#1e1e2e')
+        ax2.set_xticklabels([f"{h:02d}" for h in range(0, 24, 3)], color='#d2c2a8', fontsize=9)
+        ax2.tick_params(axis='y', colors='#d2c2a8')
+        ax2.set_facecolor('#24201b')
         ax2.spines['top'].set_visible(False)
         ax2.spines['right'].set_visible(False)
-        ax2.spines['bottom'].set_color('#45475a')
-        ax2.spines['left'].set_color('#45475a')
-        ax2.grid(color='#45475a', linestyle='--', linewidth=0.5, alpha=0.5, axis='y')
+        ax2.spines['bottom'].set_color('#4a4238')
+        ax2.spines['left'].set_color('#4a4238')
+        ax2.grid(color='#4a4238', linestyle='--', linewidth=0.5, alpha=0.5, axis='y')
 
         for bar in bars:
             height = bar.get_height()
             if height > 0:
                 ax2.text(bar.get_x() + bar.get_width()/2., height,
                         f'{int(height)}',
-                        ha='center', va='bottom', color='#cdd6f4', fontsize=7)
+                        ha='center', va='bottom', color='#f1dca7', fontsize=7)
 
         fig.tight_layout()
         self.atomic_heatmap_canvas = FigureCanvas(fig)
@@ -442,14 +442,14 @@ class StatsWindow(QDialog):
             ax = fig.add_subplot(111)
 
             # Renkler: Yeşil (Deep), Sarı (Moderate), Kırmızı (Distracted)
-            colors = ["#175611", "#7e5f1c", "#821628"]
+            colors = ["#5f6349", "#a67a3e", "#8f4f36"]
 
             ax.pie(sizes, labels=labels, autopct='%1.1f%%', 
                    startangle=90, colors=colors,
-                   textprops=dict(color="#C3CDEF"))
+                   textprops=dict(color="#D2C2A8"))
 
-            ax.set_title("Odaklanma Kalitesi", color='#cdd6f4', fontsize=12)
-            fig.patch.set_facecolor('#1e1e2e')
+            ax.set_title("Odaklanma Kalitesi", color='#f1dca7', fontsize=12)
+            fig.patch.set_facecolor('#24201b')
             fig.tight_layout()
             hlayout.addWidget(FigureCanvas(fig), stretch=2)
 
@@ -459,8 +459,8 @@ class StatsWindow(QDialog):
             lbl_insight.setWordWrap(True)
             lbl_insight.setStyleSheet("""
                 font-size: 14px; 
-                color: #cdd6f4; 
-                background-color: #313244; 
+                color: #f1dca7; 
+                background-color: #35302a; 
                 padding: 15px; 
                 border-radius: 8px;
                 line-height: 1.5;
