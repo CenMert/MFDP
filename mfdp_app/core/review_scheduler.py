@@ -235,7 +235,7 @@ def build_queue(today: Optional[datetime.date] = None, limit: Optional[int] = MA
         if not task or not task.is_active or task.is_completed:
             continue
         course = _root(task)
-        if course.id not in tracked:
+        if course.id not in tracked or course.is_completed:   # tamamlanan ders hatırlatma üretmez
             continue
         ex = exams.get(course.id)
         due, by_exam = effective_due(state, _d(ex['date']) if ex else None, today)
@@ -252,7 +252,7 @@ def build_queue(today: Optional[datetime.date] = None, limit: Optional[int] = MA
         if left > EXAM_WINDOW_DAYS:
             continue
         course = TaskRepository.get_task_by_id(course_id)
-        if not course or not course.is_active:
+        if not course or not course.is_active or course.is_completed:
             continue
         for topic in _topics_of(course):
             if topic.id in items:

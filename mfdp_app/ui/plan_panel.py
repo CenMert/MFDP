@@ -7,7 +7,7 @@ PlanPanel - Ana pencerenin sağında açılıp kapanan "bu oturumda ne yapacağ�
 
 from PySide6.QtWidgets import (QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
                                QTreeWidget, QTreeWidgetItem, QSpinBox, QComboBox, QCheckBox,
-                               QMenu, QMessageBox, QInputDialog)
+                               QMenu, QMessageBox, QInputDialog, QWidget, QScrollArea)
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QColor, QPixmap, QIcon, QKeySequence, QShortcut
 
@@ -24,13 +24,17 @@ INVALID_STYLE = "border: 1px solid #d08c60;"
 
 class PlanPanel(QFrame):
     task_chosen = Signal(int)  # ağaçtan görev seçildi (id)
+    back_requested = Signal()
 
-    WIDTH = 340
+    # Genişlik sabit değil: MainWindow pencereye göre MIN_WIDTH..MAX_WIDTH arasında verir
+    # (dar pencerede tüm alanı kaplar, ← ile kapatılır). SidePanel ile aynı davranış.
+    MIN_WIDTH = 260
+    MAX_WIDTH = 340
 
     def __init__(self, task_manager, parent=None):
         super().__init__(parent)
         self.setObjectName("SidePanel")
-        self.setFixedWidth(self.WIDTH)
+        self.setMinimumWidth(1)
         self.task_manager = task_manager  # aktif görev bunda tutulur
         self.tasks = RecursiveTaskManager()
         self._building = False
@@ -44,13 +48,38 @@ class PlanPanel(QFrame):
         self._refresh_timer.timeout.connect(self.refresh)
         self.tasks.task_updated_signal.connect(lambda _id: self._refresh_timer.start(100))
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(14, 14, 14, 14)
-        root.setSpacing(8)
+        frame = QVBoxLayout(self)
+        frame.setContentsMargins(14, 14, 14, 14)
+        frame.setSpacing(8)
 
+        header = QHBoxLayout()
+        header.setSpacing(6)
+        self.btn_back = QPushButton("→")
+        self.btn_back.setObjectName("SideBack")
+        self.btn_back.setCursor(Qt.PointingHandCursor)
+        self.btn_back.setToolTip("Sayaca dön (Esc / Ctrl+P)")
+        self.btn_back.clicked.connect(self.back_requested.emit)
+        self.btn_back.hide()
+        header.addWidget(self.btn_back)
         title = QLabel("Ne üzerinde çalışacaksın?")
         title.setObjectName("SideTitle")
-        root.addWidget(title)
+        title.setWordWrap(True)
+        header.addWidget(title, 1)
+        frame.addLayout(header)
+
+        # Gövde kaydırılabilir: kısa pencerede dikeyde taşmaz
+        scroll = QScrollArea()
+        scroll.setObjectName("SideScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        body = QWidget()
+        body.setObjectName("SideBody")
+        scroll.setWidget(body)
+        frame.addWidget(scroll, 1)
+        root = QVBoxLayout(body)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(8)
 
         # --- Görev ağacı ---
         self.tree = QTreeWidget()
@@ -241,6 +270,10 @@ class PlanPanel(QFrame):
     # ------------------------------------------------------------------
     # Ağaç
     # ------------------------------------------------------------------
+    def set_overlay(self, overlay: bool):
+        """Panel tüm alanı kaplıyorsa (dar pencere) geri butonunu göster."""
+        self.btn_back.setVisible(overlay)
+
     def refresh(self):
         show_done = self.chk_done.isChecked()
         self._building = True

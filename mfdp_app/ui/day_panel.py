@@ -12,26 +12,10 @@ from typing import Optional
 from PySide6.QtWidgets import (QFrame, QVBoxLayout, QHBoxLayout, QPushButton,
                                QLabel, QScrollArea, QWidget, QSizePolicy)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPainter, QFontMetrics
 
 from mfdp_app.core.daily_report import (DaySummary, WorkBlock, build_day_summary,
                                         logical_day, format_day_label, format_duration)
-
-
-class ElidedLabel(QLabel):
-    """Sığmadığında sonu '…' ile kırpılan etiket (genişliği ebeveyne göre daralır)."""
-
-    def __init__(self, text: str = "", parent=None):
-        super().__init__(text, parent)
-        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.setMinimumWidth(24)
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        metrics = QFontMetrics(self.font())
-        elided = metrics.elidedText(self.text(), Qt.ElideRight, self.width())
-        painter.setPen(self.palette().color(self.foregroundRole()))
-        painter.drawText(self.rect(), Qt.AlignVCenter | Qt.AlignLeft, elided)
+from mfdp_app.ui.widgets import ElidedLabel, ElidedButton
 
 
 class BlockRow(QFrame):
@@ -52,15 +36,21 @@ class BlockRow(QFrame):
         name = ElidedLabel(block.task_name)
         layout.addWidget(name, 1)
 
-        time_range = QLabel(f"{block.start:%H:%M} – {block.end:%H:%M}")
-        time_range.setObjectName("DayBlockTime")
-        layout.addWidget(time_range)
+        self._time_range = QLabel(f"{block.start:%H:%M} – {block.end:%H:%M}")
+        self._time_range.setObjectName("DayBlockTime")
+        layout.addWidget(self._time_range)
 
         duration = QLabel(format_duration(block.active_seconds))
         duration.setObjectName("DayBlockDuration")
         duration.setMinimumWidth(58)
         duration.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         layout.addWidget(duration)
+
+    TIME_RANGE_MIN_WIDTH = 240  # Satır bundan darsa saat aralığı gizlenir (ad ve süre okunur kalsın)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._time_range.setVisible(self.width() >= self.TIME_RANGE_MIN_WIDTH)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton and self.rect().contains(event.position().toPoint()):
@@ -102,7 +92,7 @@ class DayPanel(QFrame):
         # Başlık satırı
         header = QHBoxLayout()
         header.setSpacing(0)
-        self.btn_header = QPushButton()
+        self.btn_header = ElidedButton()
         self.btn_header.setObjectName("DayPanelHeader")
         self.btn_header.setCursor(Qt.PointingHandCursor)
         self.btn_header.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
