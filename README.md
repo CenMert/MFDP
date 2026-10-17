@@ -1,181 +1,150 @@
-# MFDP — Multi-Functional Distraction Preventer
+# MFDP
 
-MFDP is a local-first, data-driven Pomodoro focus assistant for Linux. It goes beyond a simple timer: it tracks your work sessions at the atomic event level, monitors context switches, and surfaces behavioral insights through detailed statistics — all stored privately in a local SQLite database with no cloud dependency.
+A local-first focus tracker for Linux. MFDP measures how you actually work: how long each session lasts, what interrupts it, what you studied and when you should review it. Everything is stored in a local SQLite database. There is no account and no cloud.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Status](https://img.shields.io/badge/Status-Active_Development-orange)
-
----
+![Version](https://img.shields.io/badge/Version-1.1.0-orange)
 
 ## Features
 
 ### Timer
 
-- **Pomodoro mode** — classic countdown timer cycling through Focus, Short Break, and Long Break phases.
-- **FreeTimer mode** — open-ended count-up timer for unstructured work sessions.
-- All durations are configurable from the settings dialog.
+- **Free Timer (default).** A count-up timer with no pause. You start, mark interruptions, and finish. Continuing afterwards is a new session, so the gap between sessions is your real break length. Sessions shorter than one minute are discarded as accidental starts.
+- **Interruptions.** Mark an internal interruption (your own distraction) with `I` or an external one (someone or something else) with `E`. The session keeps running.
+- **Pomodoro.** The classic Focus / Short Break / Long Break cycle, with configurable durations.
+- **Mini window.** A small always-on-top window showing the task color and elapsed time. A click starts or finishes the session.
 
-### Task Management
+### Planning a session
 
-- **Flat tasks** — create tasks with a name, tag, color, and optional planned duration.
-- **Hierarchical tasks** — build tree-structured task lists where completing all subtasks automatically marks the parent complete.
-- Attach a task to the active session so every focused minute is attributed to a specific piece of work.
+- **Plan panel (Ctrl+P).** A task tree on the right: add, rename, delete and complete tasks, with subtasks. A parent completes automatically when all its children are done.
+- **Start requires a plan.** Pick a task and, in Free Timer, an estimate in minutes. An optional one-line first step is recorded with the session. The estimate and note are remembered per task.
+- **Estimate alert.** You are notified when the estimate is reached; you can finish or carry on.
+- **If-then plans.** Define plans such as "at 09:00 start this task". MFDP prompts you at that time with Start, snooze or skip.
 
-### Atomic Event Tracking
+### Streaks and review
 
-Each session is instrumented at a granular level through the `AtomicAnalyzer`:
+- **Streak panel (Ctrl+B).** An 18-week contribution grid of daily focus minutes, a tolerant streak that survives a single empty day, a last-7-days count and plan adherence.
+- **Spaced review.** For courses you choose to track, topics come back on a 1-3-7-14-30 day schedule. Exam dates pull reviews earlier, and the daily queue is capped so it never builds up debt.
+- **Lecture log.** Record what was covered in a lecture; each topic becomes a subtask that enters the review schedule.
+- **Session feedback.** After each work session you rate focus from 1 to 5 and label the kind of work (reading, problems, review, production, other). On review sessions you also answer a short recall question.
 
-- Records session start/resume/complete/abandon, every pause (as an interruption), DND toggles, and 25/50/75% milestones of a Focus session.
-- The event model also defines focus shifts (active-window changes), distractions, environment changes and breaks; these are not wired up yet.
-- All events are persisted to the database with elapsed-time offsets and JSON metadata for replay and analysis.
-- Full data map (tables, formats, who reads/writes what): [`documentation/VERI_HARITASI.md`](documentation/VERI_HARITASI.md).
+### Calendar
 
-### Do Not Disturb Integration
-
-- Toggle system DND with the 🔕 button or Ctrl+D; the inhibition is released when MFDP exits.
-- Integrates with KDE's notification system via D-Bus.
+- A month view for exams, homework, meetings and date ranges.
+- Exams can be linked to a course, which drives the review schedule.
+- JSON import and export with validation and a preview, plus a prompt you can give an AI assistant to convert a messy schedule into calendar entries.
 
 ### Statistics
 
-The statistics window uses lazy tab loading — charts render only when the tab is opened:
-
 | Tab | Content |
 |-----|---------|
-| Daily Trend | Bar chart of total focused minutes over the last 7 days |
-| Tag-Based Trend | Grouped bar chart breaking down daily minutes by tag |
-| Tag Distribution | Pie/bar chart of total time per tag across all sessions |
-| Hourly Heatmap | Dual-panel view: activity heatmap by hour-of-day and a bar summary |
-| Quality Analysis | Pie chart of deep-work vs. interrupted sessions, plus a generated text insight |
+| Daily Trend | Focused minutes over the last 7 days |
+| Tag-Based Trend | Daily minutes broken down by tag |
+| Tag Distribution | Total time per tag |
+| Hourly Heatmap | Activity by hour of day |
+| Quality Analysis | Deep work versus interrupted sessions, with a text insight |
 
-### Awareness (Gong) Mode
+Charts render only when a tab is opened. You can also add a session manually (simple or detailed mode) if you forgot to start the timer. The day panel on the main window summarizes today as blocks of consecutive work, and each block has a detail report with net work, efficiency, interruptions and a timeline.
 
-An optional background chime plays at every hour and half-hour (XX:00, XX:30) to keep you grounded in real time without interrupting your flow.
+### Responsive window
 
-### Audio Feedback
+The main window has no hard minimum size. It scales down to a 150 by 240 px strip so it can sit at the edge of your screen. Controls fold into a menu as the window narrows, the timer font fits the available space, and side panels never resize the window: they sit beside the timer when there is room and overlay it when there is not.
 
-Distinct sounds play on session start, pause, completion, and for the periodic gong — loaded as Qt sound effects with no external media player required.
+### System integration
 
----
+- **Do Not Disturb.** Toggle KDE Do Not Disturb with the DND button or Ctrl+D. The inhibition is released when MFDP exits.
+- **Plasma panel widget.** Show the timer in a KDE panel. See below.
+- **Sounds.** Cues for session start and completion, plus an optional chime on the hour and half hour.
+- **In-app updates.** Check for new releases from the settings dialog.
 
-## Technology Stack
+### Event tracking
 
-| Layer | Library |
-|-------|---------|
-| Language | Python 3.10+ |
-| GUI | PySide6 (Qt for Python) |
-| Charts | Matplotlib |
-| Database | SQLite3 (connection-pooled via internal `BaseRepository`) |
-| Styling | QSS — dark theme inspired by Catppuccin Mocha |
-
----
+Sessions are recorded at the event level (start, complete, interruptions, DND toggles, milestones) with elapsed-time offsets and JSON metadata, so they can be analyzed later. The full data map, including every table and file, is in [`documentation/VERI_HARITASI.md`](documentation/VERI_HARITASI.md).
 
 ## Installation
 
-### Requirements
+Requirements: Python 3.10 or later and Linux. KDE is recommended for Do Not Disturb and the panel widget; other desktops work without those two features.
 
-- Python 3.10 or later
-- Linux (tested on KDE/GNOME; KDE recommended for DND and window-tracking features)
+```bash
+git clone https://github.com/CenMert/MFDP.git
+cd MFDP
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-### Steps
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/CenMert/MFDP.git
-   cd MFDP
-   ```
-
-2. Create and activate a virtual environment:
-
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-3. Install dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-   > Arch Linux users may need the `qt6-tools` system package for certain Qt multimedia features.
-
----
+Arch Linux users may need the `qt6-tools` system package for some Qt multimedia features.
 
 ## Usage
-
-Launch the app as a module from the project root:
 
 ```bash
 python3 -m mfdp_app.main
 ```
 
-Or use the provided shell script:
+or
 
 ```bash
 bash run.sh
 ```
 
----
+### Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| Ctrl+P | Toggle the plan panel |
+| Ctrl+B | Toggle the streak panel |
+| Ctrl+S | Save the plan for the selected task |
+| Ctrl+D | Toggle Do Not Disturb |
+| I / E | Mark an internal / external interruption |
+| Esc | Close the open side panel |
+
+### KDE panel widget
+
+```bash
+bash install_plasmoid.sh
+```
+
+Then right-click the panel, choose Add Widgets, and pick "MFDP Timer". The widget shows the task color and elapsed time; clicking it starts or finishes the session. It shows a dim icon when MFDP is closed. The app writes its state to `$XDG_RUNTIME_DIR/mfdp/state.json` and receives commands through the `org.mfdp.Timer.Toggle` D-Bus call.
 
 ## Updating
 
-Open **Ayarlar → Güncellemeleri Kontrol Et**. The app checks the latest
-[GitHub release](https://github.com/CenMert/MFDP/releases); if a newer one exists it can
-update itself (requires a `git clone` install with no local changes, and `git` on PATH),
-reinstalls dependencies when `requirements.txt` changed, and offers to restart.
-Your database (`*.db`) is never touched. Otherwise it opens the release page instead.
+Open Settings and choose "Güncellemeleri Kontrol Et". If a newer [GitHub release](https://github.com/CenMert/MFDP/releases) exists, MFDP can update itself when it was installed with `git clone`, has no local changes and `git` is on the path. It reinstalls dependencies when `requirements.txt` changed and offers to restart. Your database is never touched. In any other case it opens the release page.
+
+Release history is in [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Publishing a release (maintainer)
 
-1. Bump `__version__` in `mfdp_app/version.py` (e.g. `1.1.0`) and commit.
-2. `git tag v1.1.0 && git push origin main --tags`
-3. Create a GitHub Release from that tag.
+1. Set `__version__` in `mfdp_app/version.py` and make sure `CHANGELOG.md` has a section for that version.
+2. Commit, then `git tag vX.Y.Z && git push origin main --tags`.
+3. Create a GitHub Release from the tag, using the changelog section as the description.
 
----
+## Technology
 
-## Project Structure
+| Layer | Library |
+|-------|---------|
+| Language | Python 3.10+ |
+| GUI | PySide6 |
+| Charts | Matplotlib |
+| Database | SQLite3, connection-pooled |
+| Styling | QSS, earthy dark theme (`ui/palette.py`) |
+
+## Project structure
 
 ```
 mfdp_app/
-  core/
-    timer.py               # Pomodoro countdown and count-up timer logic
-    atomic_analyzer.py     # Atomic event recording and session instrumentation
-    task_manager.py        # Flat task CRUD and tag management
-    recursive_task_manager.py  # Hierarchical task tree logic
-    dnd_manager.py         # Do Not Disturb integration
-    system_monitor.py      # Active window detection via KDE D-Bus
-    notifier.py            # Sound effects and hourly chime
-  db/
-    database_initializer.py
-    base_repository.py     # Connection pool
-    session_repository.py
-    atomic_event_repository.py
-    task_repository.py
-    tag_repository.py
-    settings_repository.py
-  ui/
-    main_window.py
-    stats_window.py
-    task_window.py
-    recursive_task_window.py
-    settings_dialog.py
-    styles.py
+  core/    timer, event recording, task managers, review and plan schedulers,
+           streak maths, DND, calendar import/export, updater, panel bridge
+  db/      connection pool, schema setup and migrations, one repository per area
+  ui/      main window, plan and streak panels, calendar, statistics, dialogs,
+           theme and palette, responsive layout helpers
+  models/  data classes
+plasmoid/  KDE Plasma panel widget
+documentation/  data map, architecture notes, proposals
 ```
 
----
+`core/` never imports from `ui/`; Qt signals are the only path between them. See [`CLAUDE.md`](CLAUDE.md) for architecture details and conventions.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
-## KDE Panel Widget
-
-Zamanlayıcıyı (görev rengi + süre) Plasma paneline widget olarak ekleyebilirsin:
-
-```bash
-bash install_plasmoid.sh   # kurar/günceller
-```
-
-Sonra panele sağ tık → Widget ekle → "MFDP Timer". Widget tıklayınca duraklatır/devam ettirir; MFDP kapalıyken soluk bir simge gösterir. Uygulama durumu `$XDG_RUNTIME_DIR/mfdp/state.json` dosyasına yazar, komutu `org.mfdp.Timer.Toggle` D-Bus çağrısıyla alır.
+MIT. See [LICENSE](LICENSE).
