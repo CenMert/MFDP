@@ -1,8 +1,9 @@
 import datetime
-from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
-                               QLabel, QPushButton, QHBoxLayout, QCheckBox, QMessageBox)
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
+from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QGridLayout, QSizePolicy, QMenu,
+                               QLabel, QPushButton, QHBoxLayout, QCheckBox, QMessageBox, QScrollArea,
+                               QFrame)
+from PySide6.QtCore import Qt, QTimer, QPoint
+from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut, QFont, QFontMetrics
 from mfdp_app.core.notifier import Notifier
 from mfdp_app.core.timer import PmdrCountdownTimer, CountUpTimer
 from mfdp_app.core.dnd_manager import DNDManager
@@ -27,6 +28,8 @@ from mfdp_app.ui.plans_dialog import PlansDialog
 from mfdp_app.ui.lecture_dialog import LectureDialog
 from mfdp_app.ui.tracking_dialog import TrackingDialog
 from mfdp_app.ui.feedback_strip import FeedbackStrip
+from mfdp_app.ui.flow_layout import FlowLayout
+from mfdp_app.ui.widgets import ElidedButton
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -38,6 +41,20 @@ class MainWindow(QMainWindow):
         self.atomic_analyzer = AtomicAnalyzer()
         self.setWindowTitle("MFDP - Focus")
         self.resize(450, 420)
+        # İnce dikey şerit olarak sol kenara yaslanabilsin; yerleşim bu boyuta kadar bozulmaz
+        self.setMinimumSize(150, 240)
+        # Duyarlı yerleşim durumu (init_ui ve _relayout kullanır)
+        self._density = None
+        self._timer_px = None
+        self._content_w = 450
+        self._window_h = 420
+        self._height_before_grow = None
+        self._auto_height = None
+        self._timer_len = 5
+        self._overlay_active = False
+        self._tier = None
+        self._tier_density = None
+        self._timer_share = 0.17
 
         # Dialog instance'larını sakla (non-modal için)
         self.recursive_task_window = None
@@ -81,6 +98,7 @@ class MainWindow(QMainWindow):
         self.plan_scheduler = PlanScheduler(self)
         self.plan_scheduler.plan_due.connect(self.on_plan_due)
         QShortcut(QKeySequence("Ctrl+B"), self, self.toggle_side_panel)
+        QShortcut(QKeySequence("Esc"), self, self._close_side_panel_if_open)
 
         self.timer_logic_countdown.reset()
 
@@ -107,30 +125,66 @@ class MainWindow(QMainWindow):
         self.panel_bridge = PanelBridge(self._panel_snapshot, self)
         self.panel_bridge.toggle_requested.connect(self.mini_toggle)
 
+    # ------------------------------------------------------------------
+    # Duyarlı yerleşim sabitleri
+    # ------------------------------------------------------------------
+    SIDE_BY_SIDE_MIN = 640   # pencere bundan genişse panel içerikle yan yana; değilse içeriğin üstüne biner
+    WIDE_MIN = 640           # içerik genişliği >= bu: wide (varsayılan görünüm)
+    MEDIUM_MIN = 340         # >= bu: medium; altı: narrow (ince dikey şerit)
+    TIMER_MAX_PX = 90
+    TIMER_MIN_PX = 18
+    DENSITY = {
+        "wide":   {"margin": 40, "spacing": 20, "button_h": 60},
+        "medium": {"margin": 18, "spacing": 12, "button_h": 48},
+        "narrow": {"margin": 6,  "spacing": 6,  "button_h": 40},
+    }
+    # İçerik pencere yüksekliğine sığmıyorsa sırayla uygulanan dikey sıkılaştırma kademeleri
+    # (margin/spacing/button_h üst sınırı, alt butonlar ☰ menüsüne iner mi, sayaç yüksekliği payı)
+    VERTICAL_TIERS = (
+        {"margin": None, "spacing": None, "button_h": None, "hide_bottom": False, "timer_share": 0.17},
+        {"margin": 10,   "spacing": 6,    "button_h": 40,   "hide_bottom": False, "timer_share": 0.15},
+        {"margin": 8,    "spacing": 6,    "button_h": 36,   "hide_bottom": True,  "timer_share": 0.13},
+        {"margin": 4,    "spacing": 4,    "button_h": 32,   "hide_bottom": True,  "timer_share": 0.10},
+    )
+
     def init_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        outer_layout = QHBoxLayout(central_widget)
-        outer_layout.setContentsMargins(12, 12, 0, 12)
-        outer_layout.setSpacing(0)
+        # Sol kenar boşluğunu _relayout verir: panel yan yana açıkken içerik o kadar daralır
+        self.central_layout = QHBoxLayout(central_widget)
+        self.central_layout.setContentsMargins(0, 0, 0, 0)
+        self.central_layout.setSpacing(0)
 
-        # Sol yan panel: süreklilik ızgarası + eğer-ise planları (başlangıçta kapalı)
-        self.side_panel = SidePanel()
-        self.side_panel.setVisible(False)
+        # Sol yan panel: central'ın alt öğesi, elle konumlanır (pencereyi büyütmez)
+        self.side_panel = SidePanel(central_widget)
+        self.side_panel.hide()
         self.side_panel.edit_plans_requested.connect(self.open_plans)
         self.side_panel.review_start_requested.connect(self.start_task_session)
         self.side_panel.lecture_requested.connect(self.open_lecture_dialog)
         self.side_panel.tracking_requested.connect(self.open_tracking_dialog)
-        outer_layout.addWidget(self.side_panel)
+        self.side_panel.back_requested.connect(self.toggle_side_panel)
 
-        content = QWidget()
-        main_layout = QVBoxLayout(content)
-        main_layout.setContentsMargins(28, 28, 40, 28)
-        main_layout.setSpacing(20)
-        outer_layout.addWidget(content, 1)
+        self.content = QWidget()
+        self.content.setObjectName("MainContent")
+        self.content.setProperty("density", "wide")
+        main_layout = QVBoxLayout(self.content)
+        self.content_layout = main_layout
+        margin = self.DENSITY["wide"]["margin"]
+        main_layout.setContentsMargins(margin, margin, margin, margin)
+        main_layout.setSpacing(self.DENSITY["wide"]["spacing"])
 
-        # Üst kısım: yan panel tuşu (solda), mod tuşu (sağda)
+        # Güvenlik ağı: tüm dikey kademeler tükenip içerik hâlâ sığmıyorsa üst üste binmek yerine kaydırılır
+        self.scroll = QScrollArea()
+        self.scroll.setObjectName("MainScroll")
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll.setWidget(self.content)
+        self.central_layout.addWidget(self.scroll, 1)
+
+        # Üst kısım: yan panel tuşu (solda), mod tuşu (sağda), dar şeritte ☰ menü
         top_layout = QHBoxLayout()
+        top_layout.setSpacing(6)
         self.btn_side = QPushButton("▤  Süreklilik")
         self.btn_side.setObjectName("SideToggle")
         self.btn_side.setCheckable(True)
@@ -139,10 +193,11 @@ class MainWindow(QMainWindow):
         self.btn_side.clicked.connect(self.toggle_side_panel)
         top_layout.addWidget(self.btn_side)
         top_layout.addStretch()
-        
-        # Toggle butonu
-        self.btn_toggle_mode = QPushButton("Count Down")
-        self.btn_toggle_mode.setFixedSize(250, 40)
+
+        # Toggle butonu (sabit 250x40 değil: daralabilir, metin '…' ile kısalır)
+        self.btn_toggle_mode = ElidedButton("Count Down")
+        self.btn_toggle_mode.setMaximumWidth(250)
+        self.btn_toggle_mode.setFixedHeight(40)
         self.btn_toggle_mode.setCursor(Qt.PointingHandCursor)
         self.btn_toggle_mode.clicked.connect(self.toggle_timer_mode)
         self.btn_toggle_mode.setStyleSheet("""
@@ -159,71 +214,85 @@ class MainWindow(QMainWindow):
             }
         """)
         top_layout.addWidget(self.btn_toggle_mode)
+
+        # Dar şeritte alt butonlar ve mod tuşu bu menüde toplanır
+        self.btn_menu = QPushButton("☰")
+        self.btn_menu.setObjectName("MenuButton")
+        self.btn_menu.setCursor(Qt.PointingHandCursor)
+        self.btn_menu.setToolTip("Menü")
+        self.btn_menu.clicked.connect(self._show_main_menu)
+        self.btn_menu.hide()
+        top_layout.addWidget(self.btn_menu)
         main_layout.addLayout(top_layout)
 
         # Status label (countdown için)
         self.lbl_status = QLabel("Focus")
         self.lbl_status.setObjectName("StatusLabel")
         self.lbl_status.setAlignment(Qt.AlignCenter)
+        self.lbl_status.setWordWrap(True)
+        self._wrapping_policy(self.lbl_status)
         main_layout.addWidget(self.lbl_status)
-        
+
         # Status label (countup için - başlangıçta gizli)
         self.lbl_status_countup = QLabel("Free Timer")
         self.lbl_status_countup.setObjectName("StatusLabel")
         self.lbl_status_countup.setAlignment(Qt.AlignCenter)
+        self.lbl_status_countup.setWordWrap(True)
+        self._wrapping_policy(self.lbl_status_countup)
         self.lbl_status_countup.setVisible(False)
         main_layout.addWidget(self.lbl_status_countup)
-        
-        # Aktif task gösterimi - iki buton (tag ve task name)
+
+        # Aktif task gösterimi - iki chip (tag ve task name); sığmazsa '…' ile kısalır
         task_layout = QHBoxLayout()
         task_layout.setAlignment(Qt.AlignCenter)
         task_layout.setSpacing(5)
-        
-        self.btn_tag = QPushButton("")
+
+        self.btn_tag = ElidedButton("", shrinkable=False)   # doğal genişliğini korur; görev adı kısalır
         self.btn_tag.setEnabled(False)  # Tıklanamaz
         self.btn_tag.setStyleSheet("""
-            font-size: 12px; 
-            font-weight: bold; 
-            color: #cdd6f4; 
-            background-color: #313244; 
-            border: 1px solid #45475a; 
-            border-radius: 5px; 
+            font-size: 12px;
+            font-weight: bold;
+            color: #cdd6f4;
+            background-color: #313244;
+            border: 1px solid #45475a;
+            border-radius: 5px;
             padding: 5px 10px;
         """)
-        
-        self.btn_task_name = QPushButton("")
+
+        self.btn_task_name = ElidedButton("")
         self.btn_task_name.setEnabled(False)  # Tıklanamaz
         self.btn_task_name.setStyleSheet("""
-            font-size: 14px; 
-            color: #bac2de; 
-            background-color: #313244; 
-            border: 1px solid #45475a; 
-            border-radius: 5px; 
+            font-size: 14px;
+            color: #bac2de;
+            background-color: #313244;
+            border: 1px solid #45475a;
+            border-radius: 5px;
             padding: 5px 15px;
         """)
-        
+
         # Başlangıçta görünmez
         self.btn_tag.setVisible(False)
         self.btn_task_name.setVisible(False)
-        
+
         task_layout.addWidget(self.btn_tag)
         task_layout.addWidget(self.btn_task_name)
         main_layout.addLayout(task_layout)
 
-        # Timer label (countdown için)
+        # Timer label (countdown için): yatay minimum dayatmaz; font genişliğe göre hesaplanır
         self.lbl_timer = QLabel("25:00")
         self.lbl_timer.setObjectName("TimerLabel")
         self.lbl_timer.setAlignment(Qt.AlignCenter)
+        self.lbl_timer.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
         main_layout.addWidget(self.lbl_timer)
-        
+
         # Timer label (countup için - başlangıçta gizli)
         self.lbl_timer_countup = QLabel("00:00")
         self.lbl_timer_countup.setObjectName("TimerLabel")
         self.lbl_timer_countup.setAlignment(Qt.AlignCenter)
+        self.lbl_timer_countup.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
         self.lbl_timer_countup.setVisible(False)
         main_layout.addWidget(self.lbl_timer_countup)
 
-        # Gün paneli (açılır özet, her iki modda da görünür)
         # Oturum sonu geri bildirimi (odak puanı + oturum türü)
         self.feedback_strip = FeedbackStrip()
         self.feedback_strip.rating_selected.connect(lambda v: self._save_feedback(focus_rating=v))
@@ -231,57 +300,49 @@ class MainWindow(QMainWindow):
         self.feedback_strip.recall_selected.connect(self._on_recall)
         main_layout.addWidget(self.feedback_strip)
 
+        # Gün paneli (açılır özet, her iki modda da görünür)
         self.day_panel = DayPanel()
         self.day_panel.block_clicked.connect(self.open_block_detail)
         self.day_panel.expanded_changed.connect(self.on_day_panel_toggled)
         main_layout.addWidget(self.day_panel)
 
-        # Butonlar (countdown için)
-        btn_layout = QHBoxLayout()
+        # Butonlar (countdown için): yerleşimi _arrange_actions yoğunluğa göre belirler
+        self.cd_grid = QGridLayout()
+        self.cd_grid.setSpacing(8)
         self.btn_start = QPushButton("Başlat")
         self.btn_start.setObjectName("StartButton")
         self.btn_start.setCursor(Qt.PointingHandCursor)
         self.btn_start.clicked.connect(self.toggle_timer)
-        self.btn_start.setMinimumHeight(60)
-        btn_layout.addWidget(self.btn_start)
-
         self.btn_reset = QPushButton("Sıfırla")
         self.btn_reset.setCursor(Qt.PointingHandCursor)
         self.btn_reset.clicked.connect(self.reset_timer)
-        self.btn_reset.setMinimumHeight(60)
-        btn_layout.addWidget(self.btn_reset)
-        main_layout.addLayout(btn_layout)
-        
+        main_layout.addLayout(self.cd_grid)
+
         # Butonlar (countup için - başlangıçta gizli)
-        btn_layout_countup = QHBoxLayout()
+        self.cu_grid = QGridLayout()
+        self.cu_grid.setSpacing(8)
         self.btn_start_countup = QPushButton("Başlat")
         self.btn_start_countup.setObjectName("StartButton")
         self.btn_start_countup.setCursor(Qt.PointingHandCursor)
         self.btn_start_countup.clicked.connect(self.toggle_timer_countup)
-        self.btn_start_countup.setMinimumHeight(60)
         self.btn_start_countup.setVisible(False)
-        btn_layout_countup.addWidget(self.btn_start_countup)
 
         # Duraklatma yok: kesintiler oturumu durdurmadan işaretlenir
         self.btn_internal_countup = QPushButton("İç kesinti")
         self.btn_internal_countup.setCursor(Qt.PointingHandCursor)
         self.btn_internal_countup.setToolTip("Aklım dağıldı / kendim böldüm (I)")
         self.btn_internal_countup.clicked.connect(lambda: self.mark_interruption_countup("internal"))
-        self.btn_internal_countup.setMinimumHeight(60)
         self.btn_internal_countup.setVisible(False)
-        btn_layout_countup.addWidget(self.btn_internal_countup)
 
         self.btn_external_countup = QPushButton("Dış kesinti")
         self.btn_external_countup.setCursor(Qt.PointingHandCursor)
         self.btn_external_countup.setToolTip("Biri / bir şey böldü (E)")
         self.btn_external_countup.clicked.connect(lambda: self.mark_interruption_countup("external"))
-        self.btn_external_countup.setMinimumHeight(60)
         self.btn_external_countup.setVisible(False)
-        btn_layout_countup.addWidget(self.btn_external_countup)
-        main_layout.addLayout(btn_layout_countup)
+        main_layout.addLayout(self.cu_grid)
 
-        # Mola butonları (sadece countdown için)
-        self.mode_layout = QHBoxLayout()
+        # Mola butonları (sadece countdown için): sığmayan alt satıra geçer
+        self.mode_layout = FlowLayout(hspacing=6, vspacing=6)
         self.mode_buttons = []
         modes = [("Focus", "Focus"), ("Kısa Mola", "Short Break"), ("Uzun Mola", "Long Break")]
         for btn_text, mode_key in modes:
@@ -293,24 +354,22 @@ class MainWindow(QMainWindow):
             self.mode_layout.addWidget(btn)
         main_layout.addLayout(self.mode_layout)
 
-        # ALT KONTROLLER
-        settings_layout = QHBoxLayout() 
-        
+        # ALT KONTROLLER: FlowLayout, sığmayan alt satıra geçer; dar şeritte tamamen ☰ menüye iner
+        self.bottom_bar = QWidget()
+        settings_layout = FlowLayout(self.bottom_bar, hspacing=6, vspacing=6)
+
         self.chk_chime = QCheckBox("Gong Sesi")
         self.chk_chime.setObjectName("ChimeCheckbox")
         self.chk_chime.setChecked(True)
         self.chk_chime.setCursor(Qt.PointingHandCursor)
         self.chk_chime.toggled.connect(self.notifier.set_chime_enabled)
         settings_layout.addWidget(self.chk_chime)
-        
-        settings_layout.addStretch()
 
         # DND tuşu: sistem genelinde Rahatsız Etme aç/kapat (Ctrl+D)
         self.btn_dnd = QPushButton("🔕")
         self.btn_dnd.setObjectName("DNDButton")
         self.btn_dnd.setCheckable(True)
         self.btn_dnd.setCursor(Qt.PointingHandCursor)
-        self.btn_dnd.setFixedWidth(40)
         self.btn_dnd.setToolTip("Rahatsız Etme'yi şimdi aç/kapat (Ctrl+D)")
         self.btn_dnd.setStyleSheet("QPushButton#DNDButton:checked { background-color: #f38ba8; color: #1e1e2e; }")
         self.btn_dnd.setEnabled(self.dnd_manager.is_available)
@@ -321,58 +380,235 @@ class MainWindow(QMainWindow):
         self.btn_tasks = QPushButton("Tasklar")
         self.btn_tasks.setCursor(Qt.PointingHandCursor)
         self.btn_tasks.clicked.connect(self.open_tasks)
-        self.btn_tasks.setFixedWidth(100)
         self.btn_tasks.setStyleSheet("background-color: #cba6f7; color: #1e1e2e; font-weight: bold; border: none;")
         settings_layout.addWidget(self.btn_tasks)
-
-        settings_layout.addSpacing(10)
 
         # Recursive Task Butonu
         self.btn_recursive_tasks = QPushButton("Hiyerarşik Görevler")
         self.btn_recursive_tasks.setCursor(Qt.PointingHandCursor)
         self.btn_recursive_tasks.clicked.connect(self.open_recursive_tasks)
-        self.btn_recursive_tasks.setFixedWidth(180)
         self.btn_recursive_tasks.setStyleSheet("background-color: #f9e2af; color: #1e1e2e; font-weight: bold; border: none;")
         settings_layout.addWidget(self.btn_recursive_tasks)
-
-        settings_layout.addSpacing(10)
 
         # İstatistik Butonu
         self.btn_stats = QPushButton("İstatistik")
         self.btn_stats.setCursor(Qt.PointingHandCursor)
         self.btn_stats.clicked.connect(self.open_stats)
-        self.btn_stats.setFixedWidth(100)
         self.btn_stats.setStyleSheet("background-color: #89b4fa; color: #1e1e2e; font-weight: bold; border: none;")
         settings_layout.addWidget(self.btn_stats)
-
-        settings_layout.addSpacing(10)
 
         # Takvim Butonu
         self.btn_calendar = QPushButton("Takvim")
         self.btn_calendar.setCursor(Qt.PointingHandCursor)
         self.btn_calendar.clicked.connect(self.open_calendar)
-        self.btn_calendar.setFixedWidth(100)
         self.btn_calendar.setStyleSheet("background-color: #94e2d5; color: #1e1e2e; font-weight: bold; border: none;")
         settings_layout.addWidget(self.btn_calendar)
-
-        settings_layout.addSpacing(10)
 
         # Mini Mod Butonu
         self.btn_mini = QPushButton("Mini")
         self.btn_mini.setCursor(Qt.PointingHandCursor)
         self.btn_mini.clicked.connect(self.open_mini)
-        self.btn_mini.setFixedWidth(100)
         settings_layout.addWidget(self.btn_mini)
-
-        settings_layout.addSpacing(10)
 
         self.btn_settings = QPushButton("Ayarlar")
         self.btn_settings.setCursor(Qt.PointingHandCursor)
         self.btn_settings.clicked.connect(self.open_settings)
-        self.btn_settings.setFixedWidth(100)
         settings_layout.addWidget(self.btn_settings)
-        
-        main_layout.addLayout(settings_layout)
+
+        main_layout.addWidget(self.bottom_bar)
+
+        # Yerleşim, dar pencerede içeriğin hiçbir parçası minimum boyut dayatmasın
+        for btn in (self.btn_side, self.btn_menu, self.btn_start, self.btn_reset, self.btn_start_countup,
+                    self.btn_internal_countup, self.btn_external_countup, *self.mode_buttons):
+            btn.setMinimumWidth(1)
+        self._action_buttons = (self.btn_start, self.btn_reset, self.btn_start_countup,
+                                self.btn_internal_countup, self.btn_external_countup)
+        self._arrange_actions(narrow=False)
+
+    # ------------------------------------------------------------------
+    # Duyarlı yerleşim
+    # ------------------------------------------------------------------
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._relayout()
+
+    def _relayout(self):
+        """Pencere boyutuna göre: yan panel konumu, içerik yoğunluğu ve sayaç fontu."""
+        central = self.centralWidget()
+        width, height = central.width(), central.height()
+        if width <= 1 or height <= 1:
+            return
+        panel_open = not self.side_panel.isHidden()
+        side_by_side = panel_open and width >= self.SIDE_BY_SIDE_MIN
+        overlay = panel_open and not side_by_side
+
+        panel_w = 0
+        if panel_open:
+            panel_w = width if overlay else max(SidePanel.MIN_WIDTH,
+                                                min(SidePanel.MAX_WIDTH, int(width * 0.42)))
+            self.side_panel.setGeometry(0, 0, panel_w, height)
+            self.side_panel.raise_()
+        self.side_panel.set_overlay(overlay)
+        self._overlay_active = overlay
+        # Pencere genişliği değişmez: yan yana iken içerik daralır, dar pencerede panel içeriğin üstüne biner
+        self.central_layout.setContentsMargins(panel_w if side_by_side else 0, 0, 0, 0)
+        self.scroll.setVisible(not overlay)
+
+        self._content_w = width - (panel_w if side_by_side else 0)
+        self._window_h = height
+        self._apply_density(self._content_w)
+
+    def _apply_density(self, content_width):
+        """Önce genişliğe göre wide/medium/narrow, sonra içerik yüksekliğe sığana kadar dikey kademeler."""
+        level = ("wide" if content_width >= self.WIDE_MIN
+                 else "medium" if content_width >= self.MEDIUM_MIN else "narrow")
+        if level != self._density:
+            self._density = level
+            narrow = level == "narrow"
+            self.content.setProperty("density", level)
+            self.btn_toggle_mode.setVisible(not narrow)
+            self.btn_side.setText("▤" if narrow else "▤  Süreklilik")
+            self.btn_internal_countup.setText("İç" if narrow else "İç kesinti")
+            self.btn_external_countup.setText("Dış" if narrow else "Dış kesinti")
+            self._arrange_actions(narrow)
+            self._repolish(self.content)   # QSS [density] kuralları yeniden uygulansın
+            self._tier = None
+
+        # Dikey sığdırma: kademeleri sırayla dene, içerik pencere yüksekliğine sığınca dur
+        for tier in range(len(self.VERTICAL_TIERS)):
+            self._apply_tier(tier)
+            need = self.content_layout.totalHeightForWidth(max(self._content_w, 1))
+            if need <= self._window_h:
+                break
+
+    def _apply_tier(self, tier):
+        """Genişlik basamağı parametreleri + dikey kademe sınırlarını uygula."""
+        spec = self.VERTICAL_TIERS[tier]
+        params = self.DENSITY[self._density]
+        margin = params["margin"] if spec["margin"] is None else min(params["margin"], spec["margin"])
+        spacing = params["spacing"] if spec["spacing"] is None else min(params["spacing"], spec["spacing"])
+        button_h = params["button_h"] if spec["button_h"] is None else min(params["button_h"], spec["button_h"])
+        narrow = self._density == "narrow"
+        collapse = narrow or spec["hide_bottom"]   # alt butonlar ☰ menüsüne iner
+
+        if (self._tier, self._tier_density) != (tier, self._density):
+            self.content_layout.setContentsMargins(margin, margin, margin, margin)
+            self.content_layout.setSpacing(spacing)
+            for btn in self._action_buttons:
+                btn.setMinimumHeight(button_h)
+            self.bottom_bar.setVisible(not collapse)
+            self.btn_menu.setVisible(collapse)
+            self._tier, self._tier_density = tier, self._density
+        self._timer_share = spec["timer_share"]
+        self._fit_timer_font()
+
+    def _arrange_actions(self, narrow):
+        """Ana butonları yoğunluğa göre diz: geniş = yan yana, dar = Başlat tam genişlik, altında diğerleri."""
+        def place(grid, placements):
+            for widget, *_ in placements:
+                grid.removeWidget(widget)
+            for widget, row, col, row_span, col_span in placements:
+                grid.addWidget(widget, row, col, row_span, col_span)
+            used = {col + i for _, _, col, _, span in placements for i in range(span)}
+            for col in range(3):
+                grid.setColumnStretch(col, 1 if col in used else 0)
+
+        if narrow:
+            place(self.cu_grid, [(self.btn_start_countup, 0, 0, 1, 2),
+                                 (self.btn_internal_countup, 1, 0, 1, 1),
+                                 (self.btn_external_countup, 1, 1, 1, 1)])
+            place(self.cd_grid, [(self.btn_start, 0, 0, 1, 1),
+                                 (self.btn_reset, 1, 0, 1, 1)])
+        else:
+            place(self.cu_grid, [(self.btn_start_countup, 0, 0, 1, 1),
+                                 (self.btn_internal_countup, 0, 1, 1, 1),
+                                 (self.btn_external_countup, 0, 2, 1, 1)])
+            place(self.cd_grid, [(self.btn_start, 0, 0, 1, 1),
+                                 (self.btn_reset, 0, 1, 1, 1)])
+
+    @staticmethod
+    def _wrapping_policy(label):
+        """Satır kaydıran etiketin boyut politikası: yüksekliği genişliğe göre hesaplanır.
+        - setSizePolicy, QLabel'in kendi heightForWidth bayrağını sildiği için bayrak yeniden verilir.
+        - Dikey politika Maximum olamaz: yüksekliği tek satırlık sizeHint'te sınırlar, kaydıran metin kırpılır."""
+        policy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        policy.setHeightForWidth(True)
+        label.setSizePolicy(policy)
+
+    @staticmethod
+    def _repolish(root):
+        """Dinamik özellik (density) değişince QSS kurallarını yeniden uygulat."""
+        for widget in [root] + root.findChildren(QWidget):
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+        root.updateGeometry()
+
+    def _fit_timer_font(self):
+        """Sayaç yazısını genişliğe ve yüksekliğe sığacak en büyük boyuta ayarla (QSS sabit font vermez)."""
+        labels = (self.lbl_timer, self.lbl_timer_countup)
+        longest = max((label.text() for label in labels), key=len)
+        longest = max(longest, "00:00", key=len)
+        margins = self.content_layout.contentsMargins()
+        avail_w = max(self._content_w - margins.left() - margins.right(), 40)
+
+        probe = QFont(self.lbl_timer.font())
+        probe.setPixelSize(100)
+        probe.setBold(True)
+        text_w_at_100 = max(QFontMetrics(probe).horizontalAdvance(longest), 1)
+        by_width = int(avail_w * 0.96 * 100 / text_w_at_100)
+        by_height = max(self.TIMER_MIN_PX, int(self._window_h * self._timer_share))   # kısa pencerede tüm yüksekliği yemesin
+        px = max(self.TIMER_MIN_PX, min(self.TIMER_MAX_PX, by_width, by_height))
+        if px != self._timer_px:
+            self._timer_px = px
+            for label in labels:
+                label.setStyleSheet(f"font-size: {px}px;")
+
+    def _build_main_menu(self):
+        """Dar şeritte alt butonların ve mod tuşunun yerine geçen ☰ menüsü (mevcut işlevlere bağlı)."""
+        menu = QMenu(self)
+        menu.addAction("Count Down'a geç (Pomodoro)" if self.timer_mode == "countup"
+                       else "Count Up'a geç (Free Timer)", self.toggle_timer_mode)
+        menu.addSeparator()
+        for text, slot in (("Tasklar", self.open_tasks),
+                           ("Hiyerarşik Görevler", self.open_recursive_tasks),
+                           ("İstatistik", self.open_stats),
+                           ("Takvim", self.open_calendar),
+                           ("Mini", self.open_mini),
+                           ("Ayarlar", self.open_settings)):
+            menu.addAction(text, slot)
+        menu.addSeparator()
+        chime = menu.addAction("Gong sesi")
+        chime.setCheckable(True)
+        chime.setChecked(self.chk_chime.isChecked())
+        chime.triggered.connect(self.chk_chime.setChecked)
+        dnd = menu.addAction("Rahatsız Etme (Ctrl+D)")
+        dnd.setCheckable(True)
+        dnd.setChecked(self.btn_dnd.isChecked())
+        dnd.setEnabled(self.btn_dnd.isEnabled())
+        dnd.triggered.connect(lambda: self.toggle_dnd_manual())
+        return menu
+
+    def _show_main_menu(self):
+        self._build_main_menu().exec(self.btn_menu.mapToGlobal(QPoint(0, self.btn_menu.height())))
+
+    def _fit_height(self):
+        """İçerik (gün paneli, geri bildirim şeridi) sığmıyorsa pencereyi yalnızca uzat; sonra eski boyuna dön."""
+        QTimer.singleShot(0, self._apply_fit_height)
+
+    def _apply_fit_height(self):
+        if self.windowState() & (Qt.WindowMaximized | Qt.WindowFullScreen):
+            return
+        need = self.content_layout.totalHeightForWidth(max(self.content.width(), 1))
+        current = self.height()
+        if need > current:
+            if self._height_before_grow is None:
+                self._height_before_grow = current
+            self._auto_height = need
+            self.resize(self.width(), need)
+        elif (self._height_before_grow is not None and current == self._auto_height
+              and need <= self._height_before_grow):
+            self.resize(self.width(), self._height_before_grow)
+            self._height_before_grow = None
 
     def toggle_timer_mode(self):
         """Count-down ve count-up arasında geçiş yap."""
@@ -484,6 +720,7 @@ class MainWindow(QMainWindow):
         """Count-up timer label'ını güncelle."""
         self._mini_set_time(time_str)
         self.lbl_timer_countup.setText(time_str)
+        self._refit_timer_if_longer(time_str)
     
     def on_timer_finished_countup(self, finished_mode):
         """Count-up oturumu bittiğinde (durum yazısını finish_timer_countup belirler)."""
@@ -492,6 +729,13 @@ class MainWindow(QMainWindow):
     def update_timer_label(self, time_str):
         self._mini_set_time(time_str)
         self.lbl_timer.setText(time_str)
+        self._refit_timer_if_longer(time_str)
+
+    def _refit_timer_if_longer(self, time_str):
+        """Metin uzunluğu değişince (ör. 99:59 -> 100:00) sayaç fontunu yeniden hesapla."""
+        if len(time_str) != self._timer_len:
+            self._timer_len = len(time_str)
+            self._fit_timer_font()
 
     def update_status_label(self, mode):
         self.lbl_status.setText(mode)
@@ -679,8 +923,8 @@ class MainWindow(QMainWindow):
         dialog.show()
 
     def on_day_panel_toggled(self, expanded):
-        """Panel açılınca pencere uzasın, kapanınca eski boyuna dönsün."""
-        QTimer.singleShot(0, lambda: self.resize(self.width(), self.sizeHint().height()))
+        """Panel açılınca içerik sığmıyorsa pencere uzasın, kapanınca eski boyuna dönsün."""
+        self._fit_height()
 
     def toggle_dnd_manual(self):
         """DND tuşu / Ctrl+D: aç-kapat."""
@@ -697,14 +941,17 @@ class MainWindow(QMainWindow):
     # Yan panel, eğer-ise planları, oturum sonu geri bildirimi
     # ------------------------------------------------------------------
     def toggle_side_panel(self):
-        show = not self.side_panel.isVisible()
+        """Paneli aç/kapat. Pencere boyutu değişmez: içerik daralır ya da (dar pencerede) panel içeriğin üstüne biner."""
+        show = self.side_panel.isHidden()
         if show:
             self.side_panel.refresh()
         self.side_panel.setVisible(show)
         self.btn_side.setChecked(show)
-        delta = SidePanel.WIDTH if show else -SidePanel.WIDTH
-        QTimer.singleShot(0, lambda: self.resize(max(self.minimumSizeHint().width(), self.width() + delta),
-                                                 self.height()))
+        self._relayout()
+
+    def _close_side_panel_if_open(self):
+        if not self.side_panel.isHidden():
+            self.toggle_side_panel()
 
     def open_lecture_dialog(self):
         """Derste işlenenleri gir: aktif görevin (varsa) dersi varsayılan olarak seçilir."""
@@ -738,8 +985,8 @@ class MainWindow(QMainWindow):
         if session and session['mode'] in WORK_MODES:
             self.feedback_strip.open_for_session()
             self.feedback_strip.recall_allowed = review_scheduler.is_task_tracked(session['task_name'])
-            QTimer.singleShot(0, lambda: self.resize(self.width(), self.sizeHint().height()))
-        if self.side_panel.isVisible():
+            self._fit_height()
+        if not self.side_panel.isHidden():
             self.side_panel.refresh()
 
     def _save_feedback(self, focus_rating=None, session_kind=None):
@@ -760,13 +1007,15 @@ class MainWindow(QMainWindow):
         self._refresh_side_panel_if_open()
 
     def _refresh_side_panel_if_open(self):
-        if self.side_panel.isVisible():
+        if not self.side_panel.isHidden():
             self.side_panel.refresh()
 
     def start_task_session(self, task_id):
         """Görevi seç, count-up'a geç ve oturumu başlat (plan 'Başla' ve tekrar satırı için ortak)."""
         if task_id:
             self.task_manager.set_active_task(task_id)
+        if self._overlay_active:
+            self.toggle_side_panel()   # dar pencerede panel sayacın üstündeydi: kapat, sayaç görünsün
         if self.timer_mode != "countup":
             self.toggle_timer_mode()
         if not self.timer_logic_countup.is_running:
@@ -796,7 +1045,7 @@ class MainWindow(QMainWindow):
                 self.plan_scheduler.snooze(plan['id'], 10)
             else:
                 PlanRepository.log_outcome(plan['id'], day, 'skipped')
-            if self.side_panel.isVisible():
+            if not self.side_panel.isHidden():
                 self.side_panel.refresh()
 
         box.buttonClicked.connect(handle)

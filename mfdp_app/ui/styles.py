@@ -19,7 +19,7 @@ QLabel {
 
 /* Zamanlayıcıya özel stil (ID ile yakalayacağız) */
 QLabel#TimerLabel {
-    font-size: 90px;
+    /* font-size: MainWindow._fit_timer_font() pencere genişliğine göre hesaplar (28-90 px) */
     font-weight: bold;
     color: #a6e3a1; /* Pastel Yeşil */
     margin: 20px 0;
@@ -226,5 +226,85 @@ QPushButton#FeedbackClose {
     border: none;
     color: #7f849c;
     padding: 2px 6px;
+}
+
+/* Menüler (☰ menüsü): koyu zemin, açık yazı */
+QMenu {
+    background-color: #181825;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    padding: 4px;
+}
+QMenu::item {
+    padding: 6px 22px 6px 14px;
+    border-radius: 4px;
+    color: #cdd6f4;
+}
+QMenu::item:selected {
+    background-color: #313244;
+}
+QMenu::item:disabled {
+    color: #585b70;
+}
+QMenu::separator {
+    height: 1px;
+    background: #45475a;
+    margin: 4px 8px;
+}
+
+/* Ana içerik kaydırma alanı: içerik pencereye sığmazsa dikey kaydırma (yalnızca güvenlik ağı) */
+QScrollArea#MainScroll, QScrollArea#MainScroll > QWidget > QWidget#MainContent {
+    background: transparent;
+    border: none;
+}
+QScrollArea#MainScroll QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0;
+}
+QScrollArea#MainScroll QScrollBar::handle:vertical {
+    background: #45475a;
+    border-radius: 4px;
+    min-height: 24px;
+}
+QScrollArea#MainScroll QScrollBar::add-line:vertical, QScrollArea#MainScroll QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+/* Yan panel: sıkı buton dolgusu, geri butonu, şeffaf kaydırma alanı */
+QFrame#SidePanel QPushButton {
+    padding: 6px 10px;
+}
+QPushButton#SideBack {
+    padding: 2px 10px;
+    font-size: 16px;
+}
+QScrollArea#SideScroll, QWidget#SideBody {
+    background: transparent;
+    border: none;
+}
+
+/* Duyarlı yoğunluk basamakları: MainWindow._apply_density içerik genişliğine göre
+   MainContent'in "density" özelliğini wide / medium / narrow yapar. wide = varsayılan görünüm. */
+QWidget#MainContent[density="medium"] QPushButton {
+    padding: 6px 12px;
+}
+QWidget#MainContent[density="medium"] QLabel#StatusLabel {
+    font-size: 22px;
+}
+QWidget#MainContent[density="medium"] QLabel#TimerLabel {
+    margin: 6px 0;
+}
+QWidget#MainContent[density="narrow"] QPushButton {
+    padding: 4px 6px;
+}
+QWidget#MainContent[density="narrow"] QLabel#StatusLabel {
+    font-size: 15px;
+}
+QWidget#MainContent[density="narrow"] QLabel#TimerLabel {
+    margin: 0;
+}
+QWidget#MainContent[density="narrow"] QCheckBox {
+    font-size: 12px;
 }
 """

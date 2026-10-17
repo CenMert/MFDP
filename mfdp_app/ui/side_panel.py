@@ -7,7 +7,7 @@ SidePanel - Ana pencerenin solunda açılıp kapanan panel.
 import datetime
 
 from PySide6.QtWidgets import (QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-                               QWidget)
+                               QWidget, QScrollArea)
 from PySide6.QtCore import Qt, Signal
 
 from mfdp_app.core import review_scheduler
@@ -18,6 +18,7 @@ from mfdp_app.core.daily_report import logical_day, format_duration
 from mfdp_app.core.plan_scheduler import PlanScheduler
 from mfdp_app.db.plan_repository import PlanRepository
 from mfdp_app.ui.streak_widget import StreakGrid, LEVEL_COLORS
+from mfdp_app.ui.widgets import ElidedButton
 
 _TR_DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
 
@@ -57,23 +58,54 @@ class SidePanel(QFrame):
     lecture_requested = Signal()
     tracking_requested = Signal()
 
-    WIDTH = 330
+    back_requested = Signal()
+
+    # Genişlik sabit değil: MainWindow pencereye göre MIN_WIDTH..MAX_WIDTH arasında verir
+    # (dar pencerede tüm alanı kaplar, ← ile kapatılır).
+    MIN_WIDTH = 240
+    MAX_WIDTH = 330
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("SidePanel")
-        self.setFixedWidth(self.WIDTH)
+        self.setMinimumWidth(1)
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(14, 14, 14, 14)
-        root.setSpacing(8)
+        frame = QVBoxLayout(self)
+        frame.setContentsMargins(10, 10, 4, 10)
+        frame.setSpacing(6)
 
+        # Başlık satırı: dar pencerede (panel tüm alanı kaplarken) geri butonu görünür
+        header = QHBoxLayout()
+        header.setSpacing(6)
+        self.btn_back = QPushButton("←")
+        self.btn_back.setObjectName("SideBack")
+        self.btn_back.setCursor(Qt.PointingHandCursor)
+        self.btn_back.setToolTip("Sayaca dön (Esc / Ctrl+B)")
+        self.btn_back.clicked.connect(self.back_requested.emit)
+        self.btn_back.hide()
+        header.addWidget(self.btn_back)
         title = QLabel("Süreklilik")
         title.setObjectName("SideTitle")
-        root.addWidget(title)
+        header.addWidget(title, 1)
+        frame.addLayout(header)
+
+        # Gövde kaydırılabilir: kısa pencerede dikeyde taşmaz
+        scroll = QScrollArea()
+        scroll.setObjectName("SideScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        body = QWidget()
+        body.setObjectName("SideBody")
+        scroll.setWidget(body)
+        frame.addWidget(scroll, 1)
+
+        root = QVBoxLayout(body)
+        root.setContentsMargins(0, 0, 8, 0)
+        root.setSpacing(8)
 
         self.grid = StreakGrid()
-        root.addWidget(self.grid, 0, Qt.AlignLeft)
+        root.addWidget(self.grid)
 
         legend = QHBoxLayout()
         legend.setSpacing(3)
@@ -93,12 +125,14 @@ class SidePanel(QFrame):
 
         self.lbl_streak = QLabel()
         self.lbl_streak.setObjectName("SideStat")
+        self.lbl_streak.setWordWrap(True)
         self.lbl_streak.setToolTip(
             f"Bir gün ≥{ACTIVE_MINUTES} dk çalışıldıysa aktif sayılır.\n"
             "Tek boş gün seriyi bozmaz; iki gün üst üste boşluk bozar.")
         root.addWidget(self.lbl_streak)
         self.lbl_week = QLabel()
         self.lbl_week.setObjectName("SideMuted")
+        self.lbl_week.setWordWrap(True)
         root.addWidget(self.lbl_week)
 
         line = QFrame()
@@ -116,11 +150,11 @@ class SidePanel(QFrame):
         self.reviews_layout.setSpacing(4)
         root.addWidget(self.reviews_box)
 
-        btn_lecture = QPushButton("+ Derste işlenen")
+        btn_lecture = ElidedButton("+ Derste işlenen")
         btn_lecture.setCursor(Qt.PointingHandCursor)
         btn_lecture.setToolTip("Derste ne işlendiğini kaydet; tekrar takvimi o günden başlar")
         btn_lecture.clicked.connect(self.lecture_requested.emit)
-        btn_tracking = QPushButton("Hangi dersler takipte?")
+        btn_tracking = ElidedButton("Hangi dersler takipte?")
         btn_tracking.setCursor(Qt.PointingHandCursor)
         btn_tracking.setToolTip("Tekrar hatırlatması istediğin dersleri seç; diğer işler hatırlatma üretmez")
         btn_tracking.clicked.connect(self.tracking_requested.emit)
@@ -152,15 +186,20 @@ class SidePanel(QFrame):
 
         self.lbl_adherence = QLabel()
         self.lbl_adherence.setObjectName("SideMuted")
+        self.lbl_adherence.setWordWrap(True)
         self.lbl_adherence.setToolTip("Saatli planlarda: başlanan / zamanı gelen. "
                                       "Uygulama kapalıyken geçenler 'kaçırıldı' sayılır.")
         root.addWidget(self.lbl_adherence)
 
-        btn_edit = QPushButton("Planları düzenle")
+        btn_edit = ElidedButton("Planları düzenle")
         btn_edit.setCursor(Qt.PointingHandCursor)
         btn_edit.clicked.connect(self.edit_plans_requested.emit)
         root.addWidget(btn_edit)
         root.addStretch()
+
+    def set_overlay(self, overlay: bool):
+        """Panel tüm alanı kaplıyorsa (dar pencere) geri butonunu göster."""
+        self.btn_back.setVisible(overlay)
 
     def refresh(self, *_):
         data = build_streak_data()

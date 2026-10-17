@@ -43,6 +43,7 @@ MFDP is a Pomodoro/focus-tracking desktop app for Linux (KDE recommended). The c
 - `task_window.py` / `recursive_task_window.py` — Flat and hierarchical task UIs (non-modal).
 - `settings_dialog.py` — Persists settings via `SettingsRepository`.
 - `styles.py` — Single QSS string (`MODERN_DARK_THEME`) applied globally at startup; Catppuccin Mocha-inspired.
+- Responsive main window: no hard minimum sizes (min window 150×240, so it can dock as a thin vertical strip). `MainWindow._relayout` picks a density (`wide` ≥640 / `medium` ≥340 / `narrow`, via the `density` property on `#MainContent` + QSS rules at the end of `styles.py`), fits the timer font to the width (`_fit_timer_font`; never set a fixed `font-size` for `#TimerLabel` in QSS), and in `narrow` moves the bottom buttons into the ☰ menu. Use `ui/flow_layout.py` (`FlowLayout`) for rows of buttons and `ui/widgets.py` (`ElidedLabel`, `ElidedButton`) for text that must shrink. The side panel never resizes the window: side-by-side when the window is ≥640 px, otherwise it overlays the content (← / Esc closes).
 
 ### `models/`
 - `data_models.py` — `Task` dataclass (id, name, tag, color, parent_id, planned_duration_minutes, is_completed).
