@@ -40,7 +40,7 @@ MFDP is a Pomodoro/focus-tracking desktop app for Linux (KDE recommended). The c
 ### `ui/` — PySide6 windows and dialogs
 - `main_window.py` — Owns `Notifier`, `DNDManager`, `TaskManager`, `AtomicAnalyzer`, and both timer instances. Wires Qt signals between core and UI. The two timer instances (`timer_logic_countdown`, `timer_logic_countup`) are created once and swapped via `self.timer_logic`.
 - `stats_window.py` — Lazy tab loading: Matplotlib charts render only when a tab is first opened.
-- `task_window.py` / `recursive_task_window.py` — Flat and hierarchical task UIs (non-modal).
+- `task_window.py` — Flat task UI (non-modal). `plan_panel.py` — right-hand collapsible panel (Ctrl+P, open by default) beside the timer: hierarchical task tree (add/rename/delete/complete) plus the session plan. Starting a session requires a chosen task and, in FreeTimer, an estimate (minutes); an optional first-step note goes into the `session_started` event (`plan_note`). The estimate is stored in `sessions_v2.planned_duration_minutes` and remembered on the task. Estimate and the one-line note are saved per task via the panel's Save button (Ctrl+S; also auto-saved when switching tasks) — note lives in `tasks.notes`.
 - `settings_dialog.py` — Persists settings via `SettingsRepository`.
 - `styles.py` — Single QSS string (`MODERN_DARK_THEME`) applied globally at startup; earthy palette defined in `palette.py`.
 

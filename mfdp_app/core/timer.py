@@ -408,6 +408,8 @@ class CountUpTimer(QObject):
         self.task_manager = task_manager
         self.current_task_id = None
         self.atomic_analyzer = atomic_analyzer
+        self.planned_minutes = 0  # Oturum planı: başlatmadan önce arayüz doldurur
+        self.plan_note = ""
 
     def start(self):
         """Yeni oturum başlat (çalışıyorsa bir şey yapmaz)."""
@@ -503,7 +505,7 @@ class CountUpTimer(QObject):
         self.current_session = FocusSession(
             start_time=datetime.datetime.now(),
             mode="Free Timer",
-            planned_minutes=0,
+            planned_minutes=self.planned_minutes,
             current_task_id=self.current_task_id
         )
 
@@ -514,9 +516,10 @@ class CountUpTimer(QObject):
 
         if self.atomic_analyzer:
             self.atomic_analyzer.start_session(
-                planned_duration=0,
+                planned_duration=self.planned_minutes * 60,
                 session_type="Free Timer",
-                extra_metadata={"timer_model": self.TIMER_MODEL}
+                extra_metadata={"timer_model": self.TIMER_MODEL,
+                                **({"plan_note": self.plan_note} if self.plan_note else {})}
             )
 
     def _update_timer(self):
@@ -543,7 +546,7 @@ class CountUpTimer(QObject):
             start_time=session_dict['start_time'],
             end_time=session_dict['end_time'],
             duration_seconds=session_dict['duration_seconds'],
-            planned_duration_minutes=None,
+            planned_duration_minutes=session_dict['planned_duration_minutes'] or None,
             mode="Free Timer",
             completed=completed,
             task_name=session_dict['task_name'],

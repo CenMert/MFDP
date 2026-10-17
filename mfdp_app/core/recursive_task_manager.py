@@ -23,12 +23,14 @@ class RecursiveTaskManager(QObject):
         super().__init__()
     
     def create_task(self, title: str, parent_id: Optional[int] = None, 
-                   planned_duration: Optional[int] = None, tag: str = "General") -> Optional[int]:
+                   planned_duration: Optional[int] = None, tag: str = "General",
+                   color: Optional[str] = None) -> Optional[int]:
         """Yeni görev oluştur."""
         task_id = TaskRepository.insert_task(
             name=title,
             tag=tag,
             planned_duration_minutes=planned_duration,
+            color=color,
             parent_id=parent_id,
             is_completed=False
         )

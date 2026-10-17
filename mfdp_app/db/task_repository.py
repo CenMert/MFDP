@@ -127,6 +127,19 @@ class TaskRepository(BaseRepository):
         return BaseRepository.execute_query(query, tuple(params), commit=True) is not None
     
     @staticmethod
+    def get_notes(task_id: int) -> str:
+        """Görevin plan notu (yoksa boş metin)."""
+        row = BaseRepository.execute_query(
+            "SELECT notes FROM tasks WHERE id = ?", (task_id,), fetch_one=True)
+        return (row['notes'] or "") if row else ""
+
+    @staticmethod
+    def set_notes(task_id: int, notes: str) -> bool:
+        BaseRepository.execute_query(
+            "UPDATE tasks SET notes = ? WHERE id = ?", (notes, task_id), commit=True)
+        return True
+
+    @staticmethod
     def get_task_by_id(task_id: int) -> Optional['Task']:
         """
         Get a single task by ID.

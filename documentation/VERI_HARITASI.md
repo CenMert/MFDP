@@ -55,7 +55,7 @@ okuma; veri yazmaz, yerelde bir şey saklamaz).
 | `start_time` | TEXT | `YYYY-MM-DD HH:MM:SS`, **yerel saat** | İndeksli. Sıralama/aralık sorguları string karşılaştırması |
 | `end_time` | TEXT | aynı | |
 | `duration_seconds` | INTEGER | **net** süre (duraklatmalar hariç, `active_seconds`) | |
-| `planned_duration_minutes` | INTEGER | Pomodoro/mola: ayardaki süre; Free Timer ve manuel giriş: `NULL` | |
+| `planned_duration_minutes` | INTEGER | Pomodoro/mola: ayardaki süre; Free Timer: plan panelinde girilen tahmin (dk); manuel giriş: `NULL` | |
 | `mode` | TEXT | `Focus`, `Short Break`, `Long Break`, `Free Timer` | Molalar da kaydedilir |
 | `completed` | BOOLEAN | Pomodoro: `1` = süre doldu; `0` = reset, mod değişimi, uygulama kapanışı. Count-up (`countup_v1`): `1` = Bitir, `0` = uygulama kapanışı | |
 | `task_name` | TEXT | Görevin **adı** (id değil) | Görev yeniden adlandırılırsa eski oturumlarla bağ kopar |
@@ -105,7 +105,7 @@ Oturum DB'ye yazılmazsa (ör. 0 saniyelik oturum) buffer'daki olaylar atılır.
 
 | `event_type` | Kim tetikler | `metadata` alanları |
 |--------------|-------------|---------------------|
-| `session_started` | Timer, yeni oturum başlarken (Focus, molalar ve Free Timer dahil) | `planned_duration` (sn; Free Timer'da `0`), `session_type` (= mode), `app_before` (hep `null`); count-up'ta ayrıca `timer_model: "countup_v1"` |
+| `session_started` | Timer, yeni oturum başlarken (Focus, molalar ve Free Timer dahil) | `planned_duration` (sn; Free Timer'da plan panelindeki tahmin × 60), `session_type` (= mode), `app_before` (hep `null`); count-up'ta ayrıca `timer_model: "countup_v1"` ve (girildiyse) `plan_note` (oturumun ilk adım notu) |
 | `interruption_detected` | Pomodoro: kullanıcı duraklatınca (`reason`=`user_pause`, `severity`=`low`). Count-up: İç kesinti / Dış kesinti butonu veya I / E tuşu, oturum **durmadan** (`reason`=`internal`/`external`, `severity`=`low`/`medium`) | `reason`, `severity`, `interruption_number`, `first_interruption_at`, `recovery_app` (`null`), `active_seconds` |
 | `session_resumed` | Pomodoro timer, duraklatmadan devam edince (count-up'ta duraklatma yok) | `app_context` (`null`), `pause_seconds`, `active_seconds` |
 | `milestone_reached` | Pomodoro timer, **yalnızca Focus**, net sürenin %25/50/75'i | `milestone_type` (`quarter`/`halfway`/`three_quarters`), `percentage` |
@@ -132,14 +132,15 @@ Canlı DB'de bu türlerden görünen kayıtlar `seeder.py` / `seed_atomic_events
 | `id` | INTEGER PK | | |
 | `name` | TEXT UNIQUE | | Oturumlara bu ad yazılır |
 | `tag` | TEXT NOT NULL | etiket adı | Görev eklenirken `tags`'ta yoksa otomatik oluşturulur |
-| `planned_duration_minutes` | INTEGER | dakika | Bilgi amaçlı |
+| `planned_duration_minutes` | INTEGER | dakika | Plan panelinde son girilen oturum tahmini (sonraki oturumda ön dolum) |
 | `created_at` | TEXT | `YYYY-MM-DD HH:MM:SS` yerel | |
 | `is_active` | BOOLEAN | `0` = silinmiş (**soft delete**) | Satır fiziksel olarak silinmez |
 | `color` | TEXT | `#rrggbb` | Etiket rengi değişince o etiketin tüm görevlerine yayılır |
 | `parent_id` | INTEGER | üst görev id'si / `NULL` | Ağaç yapısı (`recursive_task_manager.py`) |
+| `notes` | TEXT | tek satırlık plan notu / `NULL` | Plan panelinde düzenlenir (Kaydet / Ctrl+S); oturum başlarken `session_started.plan_note` olarak da kopyalanır |
 | `is_completed` | BOOLEAN | | Tüm çocuklar tamamlanınca üst otomatik tamamlanır |
 
-**Yazanlar:** `core/task_manager.py`, `core/recursive_task_manager.py` (ui: `task_window.py`, `recursive_task_window.py`).
+**Yazanlar:** `core/task_manager.py`, `core/recursive_task_manager.py` (ui: `task_window.py`, `plan_panel.py`).
 **Okuyanlar:** görev pencereleri, timer (aktif görevin adı + tag'i oturuma kopyalanır),
 `manual_session_dialog.py`, mini pencere / panel (aktif görevin rengi).
 

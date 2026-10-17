@@ -13,7 +13,7 @@ from mfdp_app.ui.settings_dialog import SettingsDialog
 from mfdp_app.ui.stats_window import StatsWindow
 from mfdp_app.ui.calendar_window import CalendarWindow
 from mfdp_app.ui.task_window import TaskWindow
-from mfdp_app.ui.recursive_task_window import RecursiveTaskWindow
+from mfdp_app.ui.plan_panel import PlanPanel
 from mfdp_app.ui.day_panel import DayPanel
 from mfdp_app.ui.mini_window import MiniWindow
 from mfdp_app.ui.block_detail_dialog import BlockDetailDialog
@@ -37,10 +37,9 @@ class MainWindow(QMainWindow):
         self.task_manager = TaskManager()
         self.atomic_analyzer = AtomicAnalyzer()
         self.setWindowTitle("MFDP - Focus")
-        self.resize(450, 420)
+        self.resize(450 + PlanPanel.WIDTH, 420)
 
         # Dialog instance'larını sakla (non-modal için)
-        self.recursive_task_window = None
         self.task_window = None
         self.stats_window = None
         self.calendar_window = None
@@ -66,6 +65,7 @@ class MainWindow(QMainWindow):
         self.timer_logic_countup.finished_signal.connect(self.on_timer_finished_countup)
         self.timer_logic_countup.finished_signal.connect(self.notifier.play_alarm)
         self.timer_logic_countup.task_changed_signal.connect(self.on_task_changed)
+        self._estimate_warned = False
 
         self.init_ui()
 
@@ -81,6 +81,7 @@ class MainWindow(QMainWindow):
         self.plan_scheduler = PlanScheduler(self)
         self.plan_scheduler.plan_due.connect(self.on_plan_due)
         QShortcut(QKeySequence("Ctrl+B"), self, self.toggle_side_panel)
+        QShortcut(QKeySequence("Ctrl+P"), self, self.toggle_plan_panel)
 
         self.timer_logic_countdown.reset()
 
@@ -111,7 +112,6 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         outer_layout = QHBoxLayout(central_widget)
-        outer_layout.setContentsMargins(12, 12, 0, 12)
         outer_layout.setSpacing(0)
 
         # Sol yan panel: süreklilik ızgarası + eğer-ise planları (başlangıçta kapalı)
@@ -129,6 +129,12 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(20)
         outer_layout.addWidget(content, 1)
 
+        # Sağ panel: görev ağacı + oturum planı (başlangıçta açık: göz önünde dursun)
+        self.plan_panel = PlanPanel(self.task_manager)
+        self.plan_panel.task_chosen.connect(self.on_task_selected_from_dialog)
+        outer_layout.addWidget(self.plan_panel)
+        outer_layout.setContentsMargins(12, 12, 12, 12)
+
         # Üst kısım: yan panel tuşu (solda), mod tuşu (sağda)
         top_layout = QHBoxLayout()
         self.btn_side = QPushButton("▤  Süreklilik")
@@ -138,6 +144,15 @@ class MainWindow(QMainWindow):
         self.btn_side.setToolTip("Seri ızgarası ve eğer-ise planları (Ctrl+B)")
         self.btn_side.clicked.connect(self.toggle_side_panel)
         top_layout.addWidget(self.btn_side)
+
+        self.btn_plan = QPushButton("▥  Plan")
+        self.btn_plan.setObjectName("SideToggle")
+        self.btn_plan.setCheckable(True)
+        self.btn_plan.setChecked(True)
+        self.btn_plan.setCursor(Qt.PointingHandCursor)
+        self.btn_plan.setToolTip("Görevler ve oturum planı (Ctrl+P)")
+        self.btn_plan.clicked.connect(self.toggle_plan_panel)
+        top_layout.addWidget(self.btn_plan)
         top_layout.addStretch()
         
         # Toggle butonu
@@ -327,16 +342,6 @@ class MainWindow(QMainWindow):
 
         settings_layout.addSpacing(10)
 
-        # Recursive Task Butonu
-        self.btn_recursive_tasks = QPushButton("Hiyerarşik Görevler")
-        self.btn_recursive_tasks.setCursor(Qt.PointingHandCursor)
-        self.btn_recursive_tasks.clicked.connect(self.open_recursive_tasks)
-        self.btn_recursive_tasks.setFixedWidth(180)
-        self.btn_recursive_tasks.setStyleSheet("background-color: #ffcb69; color: #24201b; font-weight: bold; border: none;")
-        settings_layout.addWidget(self.btn_recursive_tasks)
-
-        settings_layout.addSpacing(10)
-
         # İstatistik Butonu
         self.btn_stats = QPushButton("İstatistik")
         self.btn_stats.setCursor(Qt.PointingHandCursor)
@@ -434,6 +439,8 @@ class MainWindow(QMainWindow):
     
     def toggle_timer(self):
         """Countdown timer için başlat/duraklat."""
+        if not self.timer_logic_countdown.is_running and not self._plan_ready(need_estimate=False):
+            return
         is_running = self.timer_logic_countdown.start_stop()
 
         if is_running:
@@ -449,11 +456,40 @@ class MainWindow(QMainWindow):
         if self.timer_logic_countup.is_running:
             self.finish_timer_countup()
         else:
+            if not self._plan_ready():
+                return
+            minutes = self.plan_panel.estimate_minutes()
+            self.timer_logic_countup.planned_minutes = minutes
+            self.timer_logic_countup.plan_note = self.plan_panel.plan_note()
+            self.plan_panel.remember_estimate()
+            self._estimate_warned = False
             self.timer_logic_countup.start()
             self.feedback_strip.hide()
             self.notifier.play_start_counter_sound()
-            self.lbl_status_countup.setText("Odakta")
+            self.lbl_status_countup.setText(f"Odakta · hedef {minutes} dk")
             self._sync_countup_buttons()
+
+    def _plan_ready(self, need_estimate=True):
+        """Başlamadan önce görev (ve tahmin) seçili olmalı; değilse planı göster ve durdur."""
+        if self.plan_panel.validate(need_estimate):
+            return True
+        if not self.plan_panel.isVisible():
+            self.toggle_plan_panel()
+        lbl = self.lbl_status_countup if self.timer_mode == "countup" else self.lbl_status
+        lbl.setText("Önce planla: görev + tahmin")
+        self.raise_()
+        self.activateWindow()
+        return False
+
+    def toggle_plan_panel(self):
+        show = not self.plan_panel.isVisible()
+        if show:
+            self.plan_panel.refresh()
+        self.plan_panel.setVisible(show)
+        self.btn_plan.setChecked(show)
+        delta = PlanPanel.WIDTH if show else -PlanPanel.WIDTH
+        QTimer.singleShot(0, lambda: self.resize(max(self.minimumSizeHint().width(), self.width() + delta),
+                                                 self.height()))
 
     def finish_timer_countup(self):
         """Count-up oturumunu bitir ve kaydet. Devam etmek yeni oturumdur."""
@@ -477,6 +513,7 @@ class MainWindow(QMainWindow):
         self.btn_start_countup.setText("Bitir" if running else "Başlat")
         self.btn_internal_countup.setEnabled(running)
         self.btn_external_countup.setEnabled(running)
+        self.plan_panel.set_locked(running)
         if self.mini_window is not None:
             self.mini_window.set_paused(not running)
 
@@ -484,6 +521,12 @@ class MainWindow(QMainWindow):
         """Count-up timer label'ını güncelle."""
         self._mini_set_time(time_str)
         self.lbl_timer_countup.setText(time_str)
+        planned = self.timer_logic_countup.planned_minutes
+        if (planned and not self._estimate_warned
+                and self.timer_logic_countup.current_time >= planned * 60):
+            self._estimate_warned = True
+            self.lbl_status_countup.setText(f"Tahmin doldu ({planned} dk) · bitir ya da devam et")
+            self.notifier.play_alarm()
     
     def on_timer_finished_countup(self, finished_mode):
         """Count-up oturumu bittiğinde (durum yazısını finish_timer_countup belirler)."""
@@ -504,6 +547,7 @@ class MainWindow(QMainWindow):
     def on_task_changed(self, task_id):
         """Aktif task değiştiğinde."""
         self._mini_sync_color(task_id)
+        self.plan_panel.sync_active(task_id)
         if task_id == -1 or task_id is None:
             self.btn_tag.setText("")
             self.btn_task_name.setText("")
@@ -660,18 +704,6 @@ class MainWindow(QMainWindow):
 
     def close_mini(self):
         self.mini_window.hide()
-
-    def open_recursive_tasks(self):
-        """Özyinelemeli görev yönetim penceresini aç."""
-        if not self._window_alive(self.recursive_task_window) or not self.recursive_task_window.isVisible():
-            if self._window_alive(self.recursive_task_window):
-                self.recursive_task_window.deleteLater()
-            self.recursive_task_window = RecursiveTaskWindow(self)
-            self.recursive_task_window.setAttribute(Qt.WA_DeleteOnClose)
-            self.recursive_task_window.show()
-        else:
-            self.recursive_task_window.raise_()
-            self.recursive_task_window.activateWindow()
 
     def open_block_detail(self, block, color):
         """Gün panelinden seçilen bloğun ayrıntılı raporunu aç."""
