@@ -308,6 +308,7 @@ class ManualSessionDialog(QDialog):
             mode="Free Timer",
             completed=self.completed_check.isChecked() if self._detailed else True,
             task_name=task.name if task else None,
+            task_id=task.id if task else None,
             category=task.tag if task else None,
             interruption_count=self.interrupt_spin.value() if self._detailed else 0,
         )

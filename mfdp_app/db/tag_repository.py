@@ -177,6 +177,22 @@ class TagRepository(BaseRepository):
         return data
     
     @staticmethod
+    def rename_tag(old: str, new: str) -> bool:
+        """
+        Rename a tag everywhere (tags, tasks.tag, sessions_v2.category).
+        If `new` already exists the two tags are merged (new keeps its color).
+        """
+        operations = [
+            ("INSERT OR IGNORE INTO tags (name, color, created_at) "
+             "SELECT ?, color, created_at FROM tags WHERE name = ?", (new, old)),
+            ("DELETE FROM tags WHERE name = ?", (old,)),
+            ("UPDATE tasks SET tag = ?, color = (SELECT color FROM tags WHERE name = ?) WHERE tag = ?",
+             (new, new, old)),
+            ("UPDATE sessions_v2 SET category = ? WHERE category = ?", (new, old)),
+        ]
+        return BaseRepository.execute_transaction(operations, f"Tag '{old}' -> '{new}'")
+
+    @staticmethod
     def delete_tag(tag_name: str) -> bool:
         """
         Delete a tag. Note: tasks using this tag will keep it, but orphaned.

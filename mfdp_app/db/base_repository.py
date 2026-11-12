@@ -37,7 +37,7 @@ class ConnectionPool:
     def _create_connection(self) -> Optional[sqlite3.Connection]:
         """Create a single database connection."""
         try:
-            conn = sqlite3.connect(self.db_name, check_same_thread=False)
+            conn = sqlite3.connect(self.db_name, check_same_thread=False, timeout=5)
             conn.row_factory = sqlite3.Row
             return conn
         except sqlite3.Error as e:
@@ -149,6 +149,7 @@ class BaseRepository:
             return result
             
         except sqlite3.Error as e:
+            conn.rollback()  # açık yazma transaction'ı havuzda kilit tutmasın
             print(f"Database query error: {e}")
             return None if fetch_all else ([] if fetch_all else None)
         finally:
@@ -212,6 +213,7 @@ class BaseRepository:
             conn.commit()
             return cursor.lastrowid
         except sqlite3.Error as e:
+            conn.rollback()
             print(f"Database insert error: {e}")
             return None
         finally:

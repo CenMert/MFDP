@@ -1040,7 +1040,7 @@ class MainWindow(QMainWindow):
         session = SessionRepository.get_session(session_id)
         if session and session['mode'] in WORK_MODES:
             self.feedback_strip.open_for_session()
-            self.feedback_strip.recall_allowed = review_scheduler.is_task_tracked(session['task_name'])
+            self.feedback_strip.recall_allowed = review_scheduler.is_task_tracked(session['task_id'])
             self._fit_height()
         if not self.side_panel.isHidden():
             self.side_panel.refresh()
@@ -1051,7 +1051,7 @@ class MainWindow(QMainWindow):
             if session_kind:
                 # Okuma / soru / üretim konuyu tekrar takvimine alır
                 session = SessionRepository.get_session(self._last_session_id)
-                review_scheduler.on_session_kind(session and session['task_name'], session_kind)
+                review_scheduler.on_session_kind(session and session['task_id'], session_kind)
                 self._refresh_side_panel_if_open()
 
     def _on_recall(self, recall):
@@ -1059,7 +1059,7 @@ class MainWindow(QMainWindow):
         if not self._last_session_id:
             return
         session = SessionRepository.get_session(self._last_session_id)
-        review_scheduler.apply_recall(session and session['task_name'], self._last_session_id, recall)
+        review_scheduler.apply_recall(session and session['task_id'], self._last_session_id, recall)
         self._refresh_side_panel_if_open()
 
     def _refresh_side_panel_if_open(self):

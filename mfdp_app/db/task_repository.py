@@ -24,7 +24,7 @@ class TaskRepository(BaseRepository):
         Create a new task.
         
         Args:
-            name: Task name (must be unique)
+            name: Task name (unique among active tasks with the same tag and parent)
             tag: Task category/tag
             planned_duration_minutes: Planned duration
             color: Task color
@@ -44,7 +44,7 @@ class TaskRepository(BaseRepository):
                 """,
                 (name, tag, planned_duration_minutes, created_at, color, parent_id, is_completed)
             )
-            
+
             if task_id:
                 # Create tag if it doesn't exist
                 tag_exists = BaseRepository.execute_query(
@@ -260,7 +260,16 @@ class TaskRepository(BaseRepository):
             True if successful, False otherwise
         """
         return TaskRepository.update_task(task_id, is_active=False)
-    
+
+    @staticmethod
+    def delete_tasks(task_ids: List[int]) -> bool:
+        """Soft delete several tasks in one transaction."""
+        if not task_ids:
+            return True
+        marks = ", ".join("?" * len(task_ids))
+        return BaseRepository.execute_transaction(
+            [(f"UPDATE tasks SET is_active = 0 WHERE id IN ({marks})", tuple(task_ids))])
+
     @staticmethod
     def get_task_time_summary(task_id: int, days: Optional[int] = None) -> float:
         """
@@ -281,19 +290,19 @@ class TaskRepository(BaseRepository):
             query = """
                 SELECT SUM(duration_seconds) / 60.0 as total_minutes
                 FROM sessions_v2
-                WHERE task_name = ?
+                WHERE task_id = ?
                 AND (mode = 'Focus' OR mode = 'Free Timer')
                 AND start_time >= date('now', ?, 'localtime')
             """
-            params = (task.name, f'-{days} days')
+            params = (task_id, f'-{days} days')
         else:
             query = """
                 SELECT SUM(duration_seconds) / 60.0 as total_minutes
                 FROM sessions_v2
-                WHERE task_name = ?
+                WHERE task_id = ?
                 AND (mode = 'Focus' OR mode = 'Free Timer')
             """
-            params = (task.name,)
+            params = (task_id,)
         
         row = BaseRepository.execute_query(query, params, fetch_one=True)
         

@@ -3,6 +3,7 @@ Database schema initialization and migrations.
 Handles creating tables, indices, and schema upgrades.
 """
 
+import re
 import sqlite3
 from typing import Optional
 
@@ -70,7 +71,7 @@ class DatabaseInitializer:
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
                 tag TEXT NOT NULL,
                 planned_duration_minutes INTEGER,
                 created_at TEXT NOT NULL,
@@ -93,6 +94,8 @@ class DatabaseInitializer:
             except sqlite3.OperationalError:
                 pass
             
+            DatabaseInitializer._migrate_task_identity(cursor)
+
             # Tasks indices
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks (parent_id);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_tag ON tasks (tag);")
@@ -235,6 +238,46 @@ class DatabaseInitializer:
         finally:
             BaseRepository.return_connection(conn)
     
+    @staticmethod
+    def _migrate_task_identity(cursor):
+        """
+        Görev adı benzersiz değil: aynı ad ('Pratik', 'Tekrar') farklı etiket / üst görev altında olabilir.
+        Oturumlar göreve `task_id` ile bağlanır (eski kayıtlar ada göre doldurulur).
+        """
+        conn = cursor.connection
+        new_column = False
+        try:
+            cursor.execute("ALTER TABLE sessions_v2 ADD COLUMN task_id INTEGER")
+            new_column = True
+        except sqlite3.OperationalError:
+            pass
+
+        sql = cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'").fetchone()[0]
+        unique_name = re.compile(r"(\bname\s+TEXT\s+NOT\s+NULL)\s+UNIQUE", re.I)
+        if unique_name.search(sql):
+            # SQLite sütun kısıtını düşüremez: tabloyu UNIQUE'siz yeniden kur (tek transaction).
+            cols = ", ".join(r[1] for r in cursor.execute("PRAGMA table_info(tasks)").fetchall())
+            new_sql = unique_name.sub(r"\1", sql)
+            new_sql = re.sub(r"CREATE TABLE\s+(IF NOT EXISTS\s+)?[\"']?tasks[\"']?", "CREATE TABLE tasks_new",
+                             new_sql, count=1, flags=re.I)
+            if not conn.in_transaction:
+                cursor.execute("BEGIN")
+            cursor.execute("DROP TABLE IF EXISTS tasks_new")
+            cursor.execute(new_sql)
+            cursor.execute(f"INSERT INTO tasks_new ({cols}) SELECT {cols} FROM tasks")
+            cursor.execute("DROP TABLE tasks")
+            cursor.execute("ALTER TABLE tasks_new RENAME TO tasks")
+            conn.commit()
+
+        if new_column:
+            cursor.execute(
+                "UPDATE sessions_v2 SET task_id = (SELECT id FROM tasks WHERE tasks.name = sessions_v2.task_name "
+                "ORDER BY is_active DESC, id LIMIT 1) WHERE task_id IS NULL AND task_name IS NOT NULL")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_task_id ON sessions_v2 (task_id);")
+        # Aynı yerde (etiket + üst görev) aynı adlı iki etkin görev olamaz
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_tasks_active_sibling "
+                       "ON tasks (name, tag, COALESCE(parent_id, 0)) WHERE is_active = 1")
+
     @staticmethod
     def verify_schema() -> bool:
         """

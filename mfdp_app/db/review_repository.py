@@ -112,21 +112,20 @@ class ReviewRepository(BaseRepository):
 
     # ---- yardımcı sorgular --------------------------------------------
     @staticmethod
-    def task_id_by_name(name: Optional[str]) -> Optional[int]:
-        """Oturumlar görevi ada göre tutar (tasks.name UNIQUE)."""
-        if not name:
-            return None
+    def child_id_by_name(parent_id: int, name: str) -> Optional[int]:
+        """Üst görevin altındaki etkin alt görevin id'si (ad aynı yerde benzersiz)."""
         row = BaseRepository.execute_query(
-            "SELECT id FROM tasks WHERE name = ?", (name,), fetch_one=True)
+            "SELECT id FROM tasks WHERE parent_id = ? AND name = ? AND is_active = 1",
+            (parent_id, name), fetch_one=True)
         return row['id'] if row else None
 
     @staticmethod
-    def last_session_day(task_name: str) -> Optional[str]:
+    def last_session_day(task_id: int) -> Optional[str]:
         """Görevde son iş oturumunun günü (takvim günü) ya da None."""
         row = BaseRepository.execute_query(
             "SELECT MAX(start_time) AS t FROM sessions_v2 "
-            "WHERE task_name = ? AND mode IN ('Focus', 'Free Timer')",
-            (task_name,), fetch_one=True)
+            "WHERE task_id = ? AND mode IN ('Focus', 'Free Timer')",
+            (task_id,), fetch_one=True)
         return row['t'][:10] if row and row['t'] else None
 
     @staticmethod

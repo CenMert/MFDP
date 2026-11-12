@@ -351,7 +351,8 @@ class PmdrCountdownTimer(QObject):
             completed=completed,
             task_name=session_dict['task_name'],
             category=session_dict['category'],
-            interruption_count=session_dict['interruption_count']
+            interruption_count=session_dict['interruption_count'],
+            task_id=self.current_session.current_task_id
         )
 
         if self.atomic_analyzer:
@@ -551,7 +552,8 @@ class CountUpTimer(QObject):
             completed=completed,
             task_name=session_dict['task_name'],
             category=session_dict['category'],
-            interruption_count=session_dict['interruption_count']
+            interruption_count=session_dict['interruption_count'],
+            task_id=self.current_session.current_task_id
         )
 
         if self.atomic_analyzer:
@@ -731,7 +733,8 @@ class PomodoroTimer(QObject):
             completed=completed,
             task_name=task_name,
             category=category,
-            interruption_count=self.interruption_count
+            interruption_count=self.interruption_count,
+            task_id=self.current_task_id
         )
         
         # Session sonrası temizlik

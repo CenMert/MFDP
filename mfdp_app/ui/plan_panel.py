@@ -7,9 +7,9 @@ PlanPanel - Ana pencerenin sağında açılıp kapanan "bu oturumda ne yapacağ�
 
 from PySide6.QtWidgets import (QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
                                QTreeWidget, QTreeWidgetItem, QSpinBox, QComboBox, QCheckBox,
-                               QMenu, QMessageBox, QInputDialog, QWidget, QScrollArea)
+                               QMenu, QMessageBox, QInputDialog, QWidget, QScrollArea, QColorDialog)
 from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QColor, QPixmap, QIcon, QKeySequence, QShortcut
+from PySide6.QtGui import QColor, QPixmap, QIcon, QKeySequence, QShortcut, QFont
 
 from mfdp_app.core.recursive_task_manager import RecursiveTaskManager
 from mfdp_app.db.tag_repository import TagRepository
@@ -20,6 +20,7 @@ TAG_COLORS = ['#e8ac65', '#9b9b7a', '#ffcb69', '#d08c60',
               '#997b66', '#d9ae94', '#797d62', '#b58463']
 DEFAULT_TAG = "General"
 INVALID_STYLE = "border: 1px solid #d08c60;"
+TAG_ROLE = Qt.UserRole + 1  # etiket başlık düğümlerinde etiket adı; görev düğümlerinde boş
 
 
 class PlanPanel(QFrame):
@@ -40,6 +41,7 @@ class PlanPanel(QFrame):
         self._building = False
         self._locked = False
         self._active_id = None
+        self._collapsed_tags = set()
         self._loading = False  # programatik doldurma kaydedilmemiş değişiklik sayılmaz
         self._dirty = False
 
@@ -97,6 +99,8 @@ class PlanPanel(QFrame):
         """)
         self.tree.itemClicked.connect(self._on_item_clicked)
         self.tree.itemChanged.connect(self._on_item_changed)
+        self.tree.itemExpanded.connect(lambda it: self._on_tag_expanded(it, True))
+        self.tree.itemCollapsed.connect(lambda it: self._on_tag_expanded(it, False))
         self.tree.customContextMenuRequested.connect(self._show_menu)
         self.tree.setMinimumHeight(180)
         root.addWidget(self.tree, 1)
@@ -116,7 +120,7 @@ class PlanPanel(QFrame):
         self.combo_tag = QComboBox()
         self.combo_tag.setEditable(True)
         self.combo_tag.setFixedWidth(90)
-        self.combo_tag.setToolTip("Ana görevin etiketi (alt görev üstünün etiketini alır)")
+        self.combo_tag.setToolTip("Ana görevin etiketi (alt görev üstünün etiketini alır; ağaçta bir etiket seçiliyse o kullanılır)")
         add_row.addWidget(self.combo_tag)
         root.addLayout(add_row)
 
@@ -131,6 +135,11 @@ class PlanPanel(QFrame):
         self.btn_add_root.setCursor(Qt.PointingHandCursor)
         self.btn_add_root.clicked.connect(self._add_root)
         add_btns.addWidget(self.btn_add_root)
+        self.btn_add_tag = QPushButton("+ Etiket")
+        self.btn_add_tag.setCursor(Qt.PointingHandCursor)
+        self.btn_add_tag.setToolTip("Boş bir etiket (grup) oluştur")
+        self.btn_add_tag.clicked.connect(self._add_tag)
+        add_btns.addWidget(self.btn_add_tag)
         root.addLayout(add_btns)
 
         line = QFrame()
@@ -280,18 +289,50 @@ class PlanPanel(QFrame):
         self.tree.blockSignals(True)
         try:
             colors = {t['name']: t['color'] for t in TagRepository.get_all_tags() if t['color']}
+            roots = self.tasks.get_root_tasks()
+            names = self._tag_names(roots)
             self.tree.clear()
-            for task in self.tasks.get_root_tasks():
-                if task.is_completed and not show_done:
-                    continue
-                item = self._make_item(task, colors)
-                self.tree.addTopLevelItem(item)
-                self._add_children(item, task.id, colors, show_done)
+            for name in names:
+                header = self._make_tag_item(name, colors.get(name))
+                self.tree.addTopLevelItem(header)
+                for task in roots:
+                    if (task.tag or DEFAULT_TAG) != name or (task.is_completed and not show_done):
+                        continue
+                    item = self._make_item(task, colors)
+                    header.addChild(item)
+                    self._add_children(item, task.id, colors, show_done)
+                header.setExpanded(name not in self._collapsed_tags)
             self._reload_tags()
         finally:
             self.tree.blockSignals(False)
             self._building = False
         self._select_active()
+
+    def _tag_names(self, roots=None):
+        """Ağaçtaki etiket başlıkları: kayıtlı etiketler (boşlar dahil) + görevlerde geçenler."""
+        names = [t['name'] for t in TagRepository.get_all_tags()]
+        for task in roots if roots is not None else self.tasks.get_root_tasks():
+            tag = task.tag or DEFAULT_TAG
+            if tag not in names:
+                names.append(tag)
+        return sorted(names, key=str.casefold)
+
+    def _make_tag_item(self, name, color):
+        item = QTreeWidgetItem()
+        item.setText(0, name)
+        item.setData(0, TAG_ROLE, name)
+        item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+        font = QFont(item.font(0))
+        font.setBold(True)
+        item.setFont(0, font)
+        item.setForeground(0, QColor(color or "#e8ac65"))
+        return item
+
+    def _on_tag_expanded(self, item, expanded):
+        name = item.data(0, TAG_ROLE)
+        if self._building or not name:
+            return
+        (self._collapsed_tags.discard if expanded else self._collapsed_tags.add)(name)
 
     def _make_item(self, task, colors):
         item = QTreeWidgetItem()
@@ -324,6 +365,10 @@ class PlanPanel(QFrame):
         if self._active_id is not None:
             item = self._find_item(self._active_id)
             if item:
+                parent = item.parent()
+                while parent:
+                    parent.setExpanded(True)
+                    parent = parent.parent()
                 item.setSelected(True)
                 self.tree.scrollToItem(item)
         self.tree.blockSignals(False)
@@ -341,7 +386,16 @@ class PlanPanel(QFrame):
         items = self.tree.selectedItems()
         return items[0].data(0, Qt.UserRole) if items else None
 
+    def _selected_tag(self):
+        """Seçili düğüm bir etiket başlığıysa adı."""
+        items = self.tree.selectedItems()
+        return items[0].data(0, TAG_ROLE) if items else None
+
     def _on_item_clicked(self, item, _col):
+        tag = item.data(0, TAG_ROLE)
+        if tag:  # başlığa tıklamak görev seçmez; yeni ana görev bu etikete eklenir
+            self.combo_tag.setEditText(tag)
+            return
         if self._locked:
             return  # oturum sürerken görev değişmez
         task_id = item.data(0, Qt.UserRole)
@@ -389,7 +443,7 @@ class PlanPanel(QFrame):
     def _reload_tags(self):
         current = self.combo_tag.currentText()
         self.combo_tag.clear()
-        names = [t['name'] for t in TagRepository.get_all_tags()] or [DEFAULT_TAG]
+        names = self._tag_names() or [DEFAULT_TAG]
         self.combo_tag.addItems(names)
         if current:
             self.combo_tag.setEditText(current)
@@ -398,16 +452,32 @@ class PlanPanel(QFrame):
         (self._add_sub if self._selected_id() else self._add_root)()
 
     def _add_root(self):
-        self._create(None)
+        self._create(None, self._selected_tag())
 
     def _add_sub(self):
         parent_id = self._selected_id()
         if parent_id is None:
+            if self._selected_tag():  # etiket seçiliyken "alt" = o etiketin altına ana görev
+                self._create(None, self._selected_tag())
+                return
             self.lbl_msg.setText("Alt görev için önce bir görev seç.")
             return
         self._create(parent_id)
 
-    def _create(self, parent_id):
+    def _add_tag(self):
+        name, ok = QInputDialog.getText(self, "Yeni etiket", "Etiket adı:")
+        name = name.strip()
+        if not ok or not name:
+            return
+        if name in self._tag_names():
+            self.lbl_msg.setText(f"'{name}' etiketi zaten var.")
+            return
+        self._tag_color(name)  # kaydeder ve paletten renk atar
+        self._collapsed_tags.discard(name)
+        self.refresh()
+        self.combo_tag.setEditText(name)
+
+    def _create(self, parent_id, tag=None):
         name = self.input_new.text().strip()
         if not name:
             self._flag(self.input_new, "Görev adı boş olamaz.")
@@ -416,13 +486,14 @@ class PlanPanel(QFrame):
             parent = TaskRepository.get_task_by_id(parent_id)
             tag = parent.tag if parent else DEFAULT_TAG
         else:
-            tag = self.combo_tag.currentText().strip() or DEFAULT_TAG
+            tag = tag or self.combo_tag.currentText().strip() or DEFAULT_TAG
         task_id = self.tasks.create_task(name, parent_id=parent_id, tag=tag, color=self._tag_color(tag))
         if not task_id:
             QMessageBox.warning(self, "Hata", "Görev oluşturulamadı (aynı adlı görev olabilir).")
             return
         self.input_new.clear()
         self._clear_invalid(self.input_new)
+        self._collapsed_tags.discard(tag)
         self.refresh()
         if not self._locked:
             self.task_chosen.emit(task_id)  # yeni eklenen görev hemen seçili olur
@@ -440,6 +511,10 @@ class PlanPanel(QFrame):
     def _show_menu(self, pos):
         item = self.tree.itemAt(pos)
         if not item:
+            return
+        tag = item.data(0, TAG_ROLE)
+        if tag:
+            self._show_tag_menu(item, tag, pos)
             return
         task_id = item.data(0, Qt.UserRole)
         menu = QMenu(self)
@@ -469,10 +544,47 @@ class PlanPanel(QFrame):
         elif chosen is act_del:
             self._delete(task_id, item.text(0))
 
+    def _show_tag_menu(self, item, tag, pos):
+        menu = QMenu(self)
+        act_add = menu.addAction("Bu etikete görev ekle")
+        act_rename = menu.addAction("Yeniden adlandır")
+        act_color = menu.addAction("Rengi değiştir…")
+        menu.addSeparator()
+        act_del = menu.addAction("Etiketi sil")
+        in_use = any((t.tag or DEFAULT_TAG) == tag for t in TaskRepository.get_all_tasks(include_inactive=True))
+        act_del.setEnabled(not in_use)
+        if in_use:
+            act_del.setToolTip("Görevi olan etiket silinemez")
+        chosen = menu.exec(self.tree.viewport().mapToGlobal(pos))
+        if chosen is act_add:
+            self.tree.clearSelection()
+            item.setSelected(True)
+            self.combo_tag.setEditText(tag)
+            self.input_new.setFocus()
+        elif chosen is act_rename:
+            new, ok = QInputDialog.getText(self, "Etiketi yeniden adlandır", "Yeni ad:", text=tag)
+            new = new.strip()
+            if ok and new and new != tag:
+                TagRepository.rename_tag(tag, new)
+                if tag in self._collapsed_tags:
+                    self._collapsed_tags.discard(tag)
+                    self._collapsed_tags.add(new)
+                self.refresh()
+                self.task_manager.active_task_changed_signal.emit(self._active_id or -1)
+        elif chosen is act_color:
+            current = next((t['color'] for t in TagRepository.get_all_tags() if t['name'] == tag), None)
+            color = QColorDialog.getColor(QColor(current or "#e8ac65"), self, f"'{tag}' rengi")
+            if color.isValid():
+                TagRepository.assign_color_to_tag(tag, color.name())
+                self.refresh()
+        elif chosen is act_del:
+            TagRepository.delete_tag(tag)
+            self.refresh()
+
     def _change_tag(self, task_id):
         """Görevin etiketini (ve rengini) değiştir; alt görevler isteğe bağlı birlikte gider."""
         task = TaskRepository.get_task_by_id(task_id)
-        names = [t['name'] for t in TagRepository.get_all_tags()] or [DEFAULT_TAG]
+        names = self._tag_names() or [DEFAULT_TAG]
         tag, ok = QInputDialog.getItem(self, "Etiketi değiştir", "Etiket (yeni yazabilirsin):",
                                        names, names.index(task.tag) if task.tag in names else 0, True)
         tag = tag.strip()
@@ -501,8 +613,7 @@ class PlanPanel(QFrame):
         if reply != QMessageBox.Yes:
             return
         doomed = [sub.id for sub in TaskRepository.get_all_subtasks_recursive(task_id)] + [task_id]
-        for tid in doomed:
-            self.tasks.delete_task(tid)
+        self.tasks.delete_tasks(doomed)
         if self._active_id in doomed:
             self.task_manager.set_active_task(None)
         self.refresh()

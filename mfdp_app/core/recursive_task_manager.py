@@ -184,3 +184,10 @@ class RecursiveTaskManager(QObject):
             self.task_updated_signal.emit(task_id)
         return success
 
+    def delete_tasks(self, task_ids) -> bool:
+        """Birden çok görevi tek transaction'da sil (soft delete)."""
+        success = TaskRepository.delete_tasks(task_ids)
+        if success and task_ids:
+            self.task_updated_signal.emit(task_ids[-1])
+        return success
+

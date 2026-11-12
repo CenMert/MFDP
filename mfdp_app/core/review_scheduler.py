@@ -94,9 +94,8 @@ def _topics_of(course) -> List:
     return leaves or ([] if course.is_completed else [course])
 
 
-def is_task_tracked(task_name: Optional[str]) -> bool:
+def is_task_tracked(task_id: Optional[int]) -> bool:
     """Görev (ya da bağlı olduğu ders) tekrar takibinde mi?"""
-    task_id = ReviewRepository.task_id_by_name(task_name)
     task = TaskRepository.get_task_by_id(task_id) if task_id else None
     return bool(task) and _root(task).id in ReviewRepository.get_tracked_course_ids()
 
@@ -135,7 +134,7 @@ def add_lecture_topics(course_id: int, day: datetime.date, titles: List[str]) ->
             continue
         seen.add(title.lower())
         name = f"{course.name} · {title}"
-        task_id = ReviewRepository.task_id_by_name(name) or TaskRepository.insert_task(
+        task_id = ReviewRepository.child_id_by_name(course.id, name) or TaskRepository.insert_task(
             name, course.tag, None, course.color, parent_id=course.id)
         if not task_id:
             skipped.append(title)
@@ -159,13 +158,12 @@ def recent_lecture_topics(days: int = 14, today: Optional[datetime.date] = None)
 # Olaylar
 # ---------------------------------------------------------------------------
 
-def on_session_kind(task_name: Optional[str], kind: str, today: Optional[datetime.date] = None) -> Optional[int]:
+def on_session_kind(task_id: Optional[int], kind: str, today: Optional[datetime.date] = None) -> Optional[int]:
     """
     Oturum türü seçildi. Başlatan türlerde (okuma/soru/üretim) konuyu takvime al.
     Returns: konunun task_id'si (görevsiz oturumda None).
     """
-    task_id = ReviewRepository.task_id_by_name(task_name)
-    if not task_id or not is_task_tracked(task_name):
+    if not task_id or not is_task_tracked(task_id):
         return None
     today = today or logical_day(datetime.datetime.now())
     if kind in START_KINDS:
@@ -173,14 +171,13 @@ def on_session_kind(task_name: Optional[str], kind: str, today: Optional[datetim
     return task_id
 
 
-def apply_recall(task_name: Optional[str], session_id: int, recall: int,
+def apply_recall(task_id: Optional[int], session_id: int, recall: int,
                  today: Optional[datetime.date] = None) -> bool:
     """
     "Tekrar" oturumundan sonra 1-4 hatırlama puanı. Aynı oturum için yeniden cevap verilirse
     önceki cevabın etkisi geri alınıp yenisi uygulanır.
     """
-    task_id = ReviewRepository.task_id_by_name(task_name)
-    if not task_id or not is_task_tracked(task_name):
+    if not task_id or not is_task_tracked(task_id):
         return False
     today = today or logical_day(datetime.datetime.now())
 
@@ -261,7 +258,7 @@ def build_queue(today: Optional[datetime.date] = None, limit: Optional[int] = MA
             days = []
             if state:
                 days.append(_d(state['last_review']))
-            session_day = ReviewRepository.last_session_day(topic.name)
+            session_day = ReviewRepository.last_session_day(topic.id)
             if session_day:
                 days.append(_d(session_day))
             last = max(days) if days else None

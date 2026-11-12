@@ -58,7 +58,8 @@ okuma; veri yazmaz, yerelde bir şey saklamaz).
 | `planned_duration_minutes` | INTEGER | Pomodoro/mola: ayardaki süre; Free Timer: plan panelinde girilen tahmin (dk); manuel giriş: `NULL` | |
 | `mode` | TEXT | `Focus`, `Short Break`, `Long Break`, `Free Timer` | Molalar da kaydedilir |
 | `completed` | BOOLEAN | Pomodoro: `1` = süre doldu; `0` = reset, mod değişimi, uygulama kapanışı. Count-up (`countup_v1`): `1` = Bitir, `0` = uygulama kapanışı | |
-| `task_name` | TEXT | Görevin **adı** (id değil) | Görev yeniden adlandırılırsa eski oturumlarla bağ kopar |
+| `task_name` | TEXT | Görevin adı (yalnız gösterim kopyası) | Görev yeniden adlandırılırsa eski oturumlarda eski ad kalır |
+| `task_id` | INTEGER | `tasks.id` — oturum ↔ görev bağının asıl anahtarı | Eski kayıtlar ilk açılışta `task_name`'e göre dolduruldu; eşleşmeyenler `NULL` |
 | `category` | TEXT | Görevin **tag**'i | `tags.name` ile eşleşir ama FK değil |
 | `focus_rating` | INTEGER | 1–5 öznel odak puanı ya da `NULL` (atlandı) | Bitir sonrası geri bildirim şeridi (`ui/feedback_strip.py`) |
 | `session_kind` | TEXT | `okuma`, `soru`, `tekrar`, `uretim`, `diger` ya da `NULL` | Aynı şerit; SM-2/FSRS tekrar planlaması için temel |
@@ -130,7 +131,7 @@ Canlı DB'de bu türlerden görünen kayıtlar `seeder.py` / `seed_atomic_events
 | Kolon | Tip | Format | Not |
 |-------|-----|--------|-----|
 | `id` | INTEGER PK | | |
-| `name` | TEXT UNIQUE | | Oturumlara bu ad yazılır |
+| `name` | TEXT NOT NULL | | Benzersiz değil (yalnız aynı etiket + üst görev altında etkin görevler arasında); oturumlar `task_id` ile bağlanır |
 | `tag` | TEXT NOT NULL | etiket adı | Görev eklenirken `tags`'ta yoksa otomatik oluşturulur |
 | `planned_duration_minutes` | INTEGER | dakika | Plan panelinde son girilen oturum tahmini (sonraki oturumda ön dolum) |
 | `created_at` | TEXT | `YYYY-MM-DD HH:MM:SS` yerel | |
@@ -241,7 +242,7 @@ Konu = görev (alt görev varsa yaprak görevler, yoksa dersin kendisi). Tekrar 
 | `source` | TEXT | `ders` (Derste işlenen penceresinden) ya da `calisma` (oturum etiketinden) |
 
 **Derste işlenenler** (`ui/lecture_dialog.py`, `core/review_scheduler.add_lecture_topics`): ders + tarih + her satıra bir konu.
-Her konu, dersin altında `"Ders · konu"` adıyla bir **alt görev** olur (`tasks.name` UNIQUE olduğu için ders adı öne eklenir;
+Her konu, dersin altında `"Ders · konu"` adıyla bir **alt görev** olur (aynı ad başka derslerde de olabileceği için ders adı öne eklenir;
 etiket ve renk dersten gelir) ve `review_state`'e `source='ders'`, `learned_on = ders günü`, ilk tekrar ertesi gün olarak yazılır.
 Aynı konu yeniden girilirse yenisi açılmaz, mevcut durum korunur. Alt görevi olan derste dersin kendisi artık konu sayılmaz,
 yalnızca yaprak alt görevler tekrar kuyruğuna girer. Sol panelde satır: `konu (ders) · derste işlendi N gün önce · sınava M gün`.
@@ -261,7 +262,7 @@ yalnızca yaprak alt görevler tekrar kuyruğuna girer. Sol panelde satır: `kon
 - Sınava bağlı derslerde (`calendar_events.task_id`): doğal vade sınavdan sonraya düşüyorsa sınavdan **bir gün öncesine** çekilir
   (o güne kadar tekrar yapılmadıysa); sınava ≤14 gün kala hiç çalışılmamış ya da >7 gündür dokunulmamış konular kuyruğa girer.
 - Kuyruk günde en fazla 5 konu gösterir (sınava en yakın önce, sonra çok unutulan); gecikmiş konular borç olarak yığılmaz.
-- Oturumun konusu `sessions_v2.task_name` üzerinden `tasks.name` (UNIQUE) ile bulunur.
+- Oturumun konusu `sessions_v2.task_id` üzerinden bulunur.
 
 **Süreklilik ızgarası** (`core/streak.py`, `ui/side_panel.py`) yeni veri tutmaz: `sessions_v2`'den son 18 haftanın
 mantıksal gün bazında iş dakikalarını hesaplar. Renk seviyesi çalışılan günlerin çeyreklerine göre (GitHub gibi);
@@ -321,7 +322,7 @@ gün ≥25 dk ise aktif; tek boş gün seriyi bozmaz, iki gün üst üste boşlu
 ## 6. Bilinen Tutarsızlıklar / Dikkat Edilecekler
 
 1. **FK/CASCADE uygulanmıyor** (bkz. §2). Oturum silme eklenirse olaylar elle silinmeli ya da her bağlantıda `PRAGMA foreign_keys = ON` açılmalı.
-2. **Oturum ↔ görev bağı ada göre.** `sessions_v2.task_name` metin; görev yeniden adlandırılırsa geçmiş oturumlar o göreve sayılmaz. `task_id` kolonu yok.
+2. **Görev adı benzersiz değil.** Aynı ad ('Pratik', 'Tekrar') farklı etiket / üst görev altında olabilir; yalnız aynı yerde (`name, tag, parent_id`) iki *etkin* aynı adlı görev olamaz (`uq_tasks_active_sibling`). Oturumlar `task_id` ile bağlı; `task_name` sadece gösterim kopyası, istatistik ekranları adı gruplayabilir.
 3. **İki farklı zaman formatı:** `sessions_v2` `YYYY-MM-DD HH:MM:SS`, `atomic_events.timestamp` ISO `T` ayraçlı. Karşılaştırmalı sorgu yazarken dikkat.
 4. **`elapsed_seconds` duvar saati,** net süre değil; duraklama sonrası olaylarda `metadata.active_seconds` kullanın.
 5. **DB yolu göreli** (`focus_tracker.db`) ve `notifier.py` ses dosyalarını `os.getcwd()`'ye göre arar: uygulama proje kökünden başlatılmazsa yeni boş bir DB oluşur. `run.sh` bu yüzden `cd` yapar.

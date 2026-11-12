@@ -21,7 +21,8 @@ class SessionRepository(BaseRepository):
         completed: bool,
         task_name: Optional[str] = None,
         category: Optional[str] = None,
-        interruption_count: int = 0
+        interruption_count: int = 0,
+        task_id: Optional[int] = None
     ) -> Optional[int]:
         """
         Log a focus/timer session.
@@ -33,7 +34,8 @@ class SessionRepository(BaseRepository):
             planned_duration_minutes: Planned duration in minutes
             mode: Session mode ('Focus' or 'Free Timer')
             completed: Whether session was completed
-            task_name: Associated task name
+            task_name: Associated task name (display copy)
+            task_id: Associated task id (the real link)
             category: Session category/tag
             interruption_count: Number of interruptions
         
@@ -45,8 +47,8 @@ class SessionRepository(BaseRepository):
             INSERT INTO sessions_v2 (
                 start_time, end_time, duration_seconds,
                 planned_duration_minutes, mode, completed,
-                task_name, category, interruption_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                task_name, category, interruption_count, task_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 start_time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -57,7 +59,8 @@ class SessionRepository(BaseRepository):
                 completed,
                 task_name,
                 category,
-                interruption_count
+                interruption_count,
+                task_id
             )
         )
         
@@ -273,19 +276,19 @@ class SessionRepository(BaseRepository):
         return stats
     
     @staticmethod
-    def get_sessions_by_task(task_name: str) -> List[Dict]:
+    def get_sessions_by_task(task_id: int) -> List[Dict]:
         """
         Get all sessions associated with a specific task.
         
         Args:
-            task_name: Name of the task
+            task_id: ID of the task
         
         Returns:
             List of session dictionaries
         """
         rows = BaseRepository.execute_query(
-            "SELECT * FROM sessions_v2 WHERE task_name = ? ORDER BY start_time DESC",
-            (task_name,),
+            "SELECT * FROM sessions_v2 WHERE task_id = ? ORDER BY start_time DESC",
+            (task_id,),
             fetch_all=True
         )
         

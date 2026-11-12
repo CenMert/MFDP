@@ -100,9 +100,9 @@ def get_focus_quality_stats():
     return SessionRepository.get_focus_quality_stats()
 
 
-def get_sessions_by_task(task_name):
+def get_sessions_by_task(task_id):
     """Get all sessions for a specific task."""
-    return SessionRepository.get_sessions_by_task(task_name)
+    return SessionRepository.get_sessions_by_task(task_id)
 
 
 def get_sessions_by_category(category, days=None):
